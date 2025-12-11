@@ -245,6 +245,10 @@ from src.project.repository.ProjectRepositoryImp import ProjectRepositoryImp
 from src.db.repository.UserProjectLinkRepositoryImp import UserProjectLinkRepositoryImp
 from src.org.services.OrgService import OrgService
 from src.utils.FileService import FileService
+from src.experiment.services.ExperimentService import ExperimentService
+from src.experiment.repository.ExperimentRepositoryImp import ExperimentRepositoryImp
+from src.variation.services.VariationService import VariationService
+from src.variation.repository.VariationRepositoryImp import VariationRepositoryImp
 
 def getUserService(db: DBSessionDep, bgTask: BackgroundTasks) -> UserService:
   crypto = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -283,8 +287,6 @@ def getOrgService(db: DBSessionDep, bgTask: BackgroundTasks) -> OrgService:
   orgRepo = OrgRepositoryImp(db)
   userRepo = UserRepositoryImp(db)
   roleRepo = RoleRepositoryImp(db)
-  
-  # Change #1: Instantiate UserOrgLinkRepo and MenuTemplateRepo
   userOrgLinkRepo = UserOrgLinkRepositoryImp(db)
   mtRepo = MenuTemplateRepositoryImp(db)
   
@@ -292,7 +294,6 @@ def getOrgService(db: DBSessionDep, bgTask: BackgroundTasks) -> OrgService:
   fileService = getFileService()
   emailService = EmailServiceImp(bgTask)
   
-  # Change #2: Pass new repos to OrgService
   return OrgService(
     orgRepo, 
     userRepo, 
@@ -304,6 +305,16 @@ def getOrgService(db: DBSessionDep, bgTask: BackgroundTasks) -> OrgService:
     mtRepo
   )
 
+def getExperimentService(db: DBSessionDep) -> ExperimentService:
+  repo = ExperimentRepositoryImp(db)
+  projectRepo = ProjectRepositoryImp(db) 
+  return ExperimentService(repo, projectRepo)
+
+def getVariationService(db: DBSessionDep) -> VariationService:
+  repo = VariationRepositoryImp(db)
+  experimentRepo = ExperimentRepositoryImp(db)
+  return VariationService(repo, experimentRepo)
+
 UserServiceDep = Annotated[UserService, Depends(getUserService)]
 MenuServiceDep = Annotated[MenuService, Depends(getMenuService)]
 AuthServiceDep = Annotated[AuthService, Depends(getAuthService)]
@@ -311,6 +322,8 @@ RoleServiceDep = Annotated[RoleService, Depends(getRoleService)]
 MenuTemplateServiceDep = Annotated[MenuTemplateService, Depends(getMenuTemplateService)]
 ProjectServiceDep = Annotated[ProjectService, Depends(getProjectService)]
 OrgServiceDep = Annotated[OrgService, Depends(getOrgService)]
+ExperimentServiceDep = Annotated[ExperimentService, Depends(getExperimentService)]
+VariationServiceDep = Annotated[VariationService, Depends(getVariationService)]
 
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\docker-compose.yml
 version: "3.8"
@@ -398,10 +411,11 @@ from fastapi.staticfiles import StaticFiles
 from src.action import ActionRouter
 from src.project import ProjectRouter
 from src.org import OrgRouter
+from src.experiment import ExperimentRouter 
+from src.variation import VariationRouter
 from core import app
 
-# IMPORT #1: Import all SQLModel models so SQLAlchemy can resolve relationships
-# This must be done before any router that uses these models
+# IMPORT Models
 from src.user.model.User import User
 from src.org.model.Organization import Organization
 from src.menu.model.Menu import Menu
@@ -425,6 +439,8 @@ app.include_router(RoleRouter.routes, dependencies=[Depends(getEmail), Depends(H
 app.include_router(MenuTemplateRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
 app.include_router(ActionRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
 app.include_router(ProjectRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
+app.include_router(ExperimentRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
+app.include_router(VariationRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
 app.include_router(AuthRouter.routes)
 app.include_router(UserInsecureRouter.routes)
 app.include_router(OrgRouter.routes)
@@ -440,12 +456,11 @@ app.add_middleware(
   CORSMiddleware,
   allow_origins=origins,             
   allow_credentials=True,            
-  allow_methods=["*"],               
+  allow_methods=["*"],        
   allow_headers=["*"],               
 )
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
 
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\PG-DB-LOCAL.session.sql
 SELECT * FROM userinfo;
@@ -1399,6 +1414,144 @@ class EmailServiceImp(EmailService):
     self.bgTask.add_task(self.sendMail, email, html, "Password reset otp!")
     return True
 
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\experiment\ExperimentRouter.py
+from fastapi import APIRouter
+from di import ExperimentServiceDep
+from src.experiment.dtos.ExperimentCreateRequestDto import ExperimentCreateRequestDto
+from src.experiment.dtos.ExperimentCreateResponseDto import ExperimentCreateResponseDto
+from src.experiment.dtos.ExperimentResponseDto import ExperimentResponseDto
+from src.utils.pagination.PaginationRequestDto import PaginationRequestDto
+from src.utils.pagination.PaginationResponseDto import PaginationResponseDto
+
+routes = APIRouter()
+
+@routes.post(
+  "/experiments", 
+  response_model=ExperimentCreateResponseDto, 
+  tags=["experiment"],
+  name="act:create-experiment"
+)
+async def createExperiment(
+    reqDto: ExperimentCreateRequestDto,
+    service: ExperimentServiceDep
+  ) -> ExperimentCreateResponseDto:
+  return service.createExperiment(reqDto)
+
+@routes.post(
+  "/experiments/all",
+  tags=["experiment"],
+  name="act:get-experiments",
+  response_model=PaginationResponseDto[ExperimentResponseDto]
+)
+async def getExperiments(
+  reqDto: PaginationRequestDto, 
+  service: ExperimentServiceDep
+) -> PaginationResponseDto[ExperimentResponseDto]:  
+  return service.getExperiments(reqDto)
+
+@routes.get(
+  "/experiments/{id}",
+  tags=["experiment"],
+  name="act:get-experiment",
+  response_model=ExperimentResponseDto
+)
+async def getExperimentById(
+  id: int,
+  service: ExperimentServiceDep
+) -> ExperimentResponseDto:
+  return service.getById(id)
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\experiment\dtos\ExperimentCreateRequestDto.py
+from dataclasses import dataclass
+from typing import List, Optional
+from pydantic import constr
+from src.experiment.model.ExperimentType import ExperimentType
+from src.experiment.model.ExperimentStatus import ExperimentStatus
+from src.experiment.model.TriggerType import TriggerType
+from src.experiment.model.ConditionType import ConditionType
+
+@dataclass
+class ExperimentCreateRequestDto:
+  projectId: int
+  title: constr(min_length=1) # type: ignore
+  url: Optional[str] = None
+  description: Optional[str] = None
+  
+
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\experiment\dtos\ExperimentCreateResponseDto.py
+from dataclasses import dataclass
+from src.experiment.model.ExperimentStatus import ExperimentStatus
+
+@dataclass
+class ExperimentCreateResponseDto:
+  id: int
+  title: str
+  status: ExperimentStatus
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\experiment\dtos\ExperimentResponseDto.py
+from dataclasses import dataclass
+from typing import Optional
+from datetime import datetime
+from src.experiment.model.ExperimentType import ExperimentType
+from src.experiment.model.ExperimentStatus import ExperimentStatus
+from src.experiment.model.TriggerType import TriggerType
+from src.experiment.model.ConditionType import ConditionType
+
+@dataclass
+class ExperimentResponseDto:
+  id: int
+  title: str
+  projectId: int
+  type: ExperimentType
+  status: ExperimentStatus
+  url: Optional[str]
+  description: Optional[str]
+  triggerType: TriggerType
+  conditionType: ConditionType
+  js: Optional[str]
+  css: Optional[str]
+  createdAt: Optional[datetime]
+  updatedAt: Optional[datetime]
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\experiment\dtos\ExperimentUpdateRequestDto.py
+from typing import Optional
+from pydantic import model_validator, BaseModel, field_validator, HttpUrl, TypeAdapter, ValidationError
+from src.experiment.model.ExperimentType import ExperimentType
+from src.experiment.model.ExperimentStatus import ExperimentStatus
+from src.experiment.model.TriggerType import TriggerType
+from src.experiment.model.ConditionType import ConditionType
+
+class ExperimentUpdateRequestDto(BaseModel):
+  title: Optional[str] = None
+  js: Optional[str] = None
+  css: Optional[str] = None
+  type: Optional[ExperimentType] = None
+  status: Optional[ExperimentStatus] = None
+  url: Optional[str] = None
+  description: Optional[str] = None
+  triggerType: Optional[TriggerType] = None
+  conditionType: Optional[ConditionType] = None
+
+  # 1. Validate URL format if provided
+  @field_validator('url')
+  def validate_url(cls, v):
+    if v is not None:
+      try:
+        # We use Pydantic's TypeAdapter to validate the string as a HttpUrl
+        TypeAdapter(HttpUrl).validate_python(v)
+      except ValidationError:
+        raise ValueError("Invalid URL format!")
+    return v
+
+  # 2. Existing validator to ensure at least one field is present
+  @model_validator(mode='after')
+  def check_at_least_one_field(self):
+    # Check if all fields are None
+    if not any(value is not None for value in self.__dict__.values()):
+      raise ValueError("At least one field must be provided for update!")
+    return self
+
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\experiment\model\ConditionType.py
 from enum import StrEnum
 
@@ -1475,6 +1628,197 @@ class TriggerType(StrEnum):
   IMMEDIATELY = "Immediately"
   DOM_READY = "DOM Ready"
   URL_CHANGES = "URL Changes"
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\experiment\repository\ExperimentRepository.py
+from abc import ABC, abstractmethod
+from src.experiment.model.Experiment import Experiment
+
+class ExperimentRepository(ABC):
+  
+  @abstractmethod
+  def add(self, experiment: Experiment) -> Experiment:
+    pass
+
+  @abstractmethod
+  def getById(self, id: int) -> Experiment:
+    pass
+
+  @abstractmethod
+  def getAll(self, rows: int, page: int, projectId: int) -> list[Experiment]:
+    pass
+
+  @abstractmethod
+  def countAll(self, projectId: int) -> int:
+    pass
+
+  @abstractmethod
+  def edit(self, experiment: Experiment) -> Experiment:
+    pass
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\experiment\repository\ExperimentRepositoryImp.py
+from src.experiment.repository.ExperimentRepository import ExperimentRepository
+from src.experiment.model.Experiment import Experiment
+from db import DBSessionDep
+from fastapi import status, HTTPException
+from sqlmodel import select
+from sqlalchemy import func
+
+class ExperimentRepositoryImp(ExperimentRepository):
+  def __init__(self, db: DBSessionDep):
+    self.db = db
+
+  def add(self, experiment: Experiment) -> Experiment:
+    self.db.add(experiment)
+    self.db.commit()
+    self.db.refresh(experiment)
+    return experiment
+
+  def getById(self, id: int) -> Experiment:
+    experiment = self.db.get(Experiment, id)
+    if not experiment:
+      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found")
+    return experiment
+
+  def getAll(self, rows: int, page: int, projectId: int) -> list[Experiment]:
+    offset: int = (page - 1) * rows
+    return self.db.exec(
+      select(Experiment)
+      .where(Experiment.projectId == projectId)
+      .offset(offset).limit(rows)
+    ).all()
+
+  def countAll(self, projectId: int) -> int:
+    return self.db.exec(
+      select(func.count(Experiment.id))
+      .where(Experiment.projectId == projectId)
+    ).one()
+
+  def edit(self, experiment: Experiment) -> Experiment:
+    self.db.add(experiment)
+    self.db.commit()
+    self.db.refresh(experiment)
+    return experiment
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\experiment\services\ExperimentService.py
+from src.experiment.repository.ExperimentRepository import ExperimentRepository
+from src.project.repository.ProjectRepository import ProjectRepository
+from src.experiment.dtos.ExperimentCreateRequestDto import ExperimentCreateRequestDto
+from src.experiment.dtos.ExperimentCreateResponseDto import ExperimentCreateResponseDto
+from src.experiment.dtos.ExperimentResponseDto import ExperimentResponseDto
+from src.experiment.dtos.ExperimentUpdateRequestDto import ExperimentUpdateRequestDto
+from src.experiment.model.Experiment import Experiment
+from src.variation.model.Variation import Variation
+from src.utils.pagination.PaginationRequestDto import PaginationRequestDto
+from src.utils.pagination.PaginationResponseDto import PaginationResponseDto
+from fastapi import HTTPException, status
+
+class ExperimentService:
+  def __init__(
+    self, 
+    repo: ExperimentRepository, 
+    projectRepo: ProjectRepository
+  ):
+    self.repo = repo
+    self.projectRepo = projectRepo
+
+  def createExperiment(self, reqDto: ExperimentCreateRequestDto) -> ExperimentCreateResponseDto:
+    self.projectRepo.getProjectById(reqDto.projectId)
+
+    newExp = Experiment(
+      title=reqDto.title,
+      projectId=reqDto.projectId,
+      type=reqDto.type,
+      url=reqDto.url,
+      status=reqDto.status,
+      triggerType=reqDto.triggerType,
+      conditionType=reqDto.conditionType,
+      description=reqDto.description,
+      js=reqDto.js,
+      css=reqDto.css,
+      variations=[],
+      conditions=[], 
+      metrics=[]     
+    )
+
+    newExp.variations.append(Variation(
+      title="Control", 
+      traffic=100,
+      js=None,
+      css=None
+    ))
+
+    savedExp = self.repo.add(newExp)
+
+    return ExperimentCreateResponseDto(
+      id=savedExp.id,
+      title=savedExp.title,
+      status=savedExp.status
+    )
+
+  def getExperiments(self, reqDto: PaginationRequestDto) -> PaginationResponseDto[ExperimentResponseDto]:
+    projectId = reqDto.orgId 
+    
+    total = reqDto.total
+    if total is None or total == 0:
+      total = self.repo.countAll(projectId=projectId)
+
+    exps = self.repo.getAll(rows=reqDto.rows, page=reqDto.page, projectId=projectId)
+    
+    items = []
+    for e in exps:
+      items.append(self._mapToResponse(e))
+
+    return PaginationResponseDto[ExperimentResponseDto](items=items, total=total)
+
+  def getById(self, id: int) -> ExperimentResponseDto:
+    e = self.repo.getById(id)
+    return self._mapToResponse(e)
+
+  # 1. Added update logic
+  def updateExperiment(self, id: int, reqDto: ExperimentUpdateRequestDto) -> ExperimentResponseDto:
+    # Fetch existing experiment
+    experiment = self.repo.getById(id)
+
+    # Update fields if provided
+    if reqDto.title is not None:
+      experiment.title = reqDto.title
+    if reqDto.js is not None:
+      experiment.js = reqDto.js
+    if reqDto.css is not None:
+      experiment.css = reqDto.css
+    if reqDto.type is not None:
+      experiment.type = reqDto.type
+    if reqDto.status is not None:
+      experiment.status = reqDto.status
+    if reqDto.url is not None:
+      experiment.url = reqDto.url
+    if reqDto.description is not None:
+      experiment.description = reqDto.description
+    if reqDto.triggerType is not None:
+      experiment.triggerType = reqDto.triggerType
+    if reqDto.conditionType is not None:
+      experiment.conditionType = reqDto.conditionType
+
+    updatedExp = self.repo.edit(experiment)
+    return self._mapToResponse(updatedExp)
+
+  # Helper to avoid code duplication in mapping
+  def _mapToResponse(self, e: Experiment) -> ExperimentResponseDto:
+    return ExperimentResponseDto(
+      id=e.id,
+      title=e.title,
+      projectId=e.projectId, # type: ignore
+      type=e.type,
+      status=e.status,
+      url=e.url,
+      description=e.description,
+      triggerType=e.triggerType,
+      conditionType=e.conditionType,
+      js=e.js,
+      css=e.css,
+      createdAt=e.createdAt,
+      updatedAt=e.updatedAt
+    )
 
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\menu\MenuRouter.py
 from fastapi import APIRouter
@@ -3247,6 +3591,115 @@ class PaginationResponseDto[T]:
   items: list[T]
   total: int
 
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\variation\VariationRouter.py
+from fastapi import APIRouter
+from di import VariationServiceDep
+from src.variation.dtos.VariationCreateRequestDto import VariationCreateRequestDto
+from src.variation.dtos.VariationResponseDto import VariationResponseDto
+from src.variation.dtos.VariationUpdateRequestDto import VariationUpdateRequestDto
+from src.variation.dtos.TrafficAllocationRequestDto import TrafficAllocationRequestDto
+
+routes = APIRouter()
+
+@routes.post(
+  "/experiments/{experimentId}/variations", 
+  response_model=VariationResponseDto, 
+  tags=["variation"],
+  name="act:create-variation"
+)
+async def createVariation(
+    experimentId: int,
+    reqDto: VariationCreateRequestDto,
+    service: VariationServiceDep
+  ) -> VariationResponseDto:
+  return service.createVariation(experimentId, reqDto)
+
+# 1. PATCH: Update general variation details
+@routes.patch(
+  "/variations/{id}",
+  response_model=VariationResponseDto,
+  tags=["variation"],
+  name="act:update-variation"
+)
+async def updateVariation(
+  id: int,
+  reqDto: VariationUpdateRequestDto,
+  service: VariationServiceDep
+) -> VariationResponseDto:
+  return service.updateVariation(id, reqDto)
+
+# 2. PUT: Update traffic allocation (Bulk)
+@routes.put(
+  "/experiments/{experimentId}/traffic",
+  response_model=list[VariationResponseDto],
+  tags=["variation"],
+  name="act:update-traffic-allocation"
+)
+async def updateTrafficAllocation(
+  experimentId: int,
+  reqDto: TrafficAllocationRequestDto,
+  service: VariationServiceDep
+) -> list[VariationResponseDto]:
+  return service.updateTrafficAllocation(experimentId, reqDto)
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\variation\dtos\TrafficAllocationRequestDto.py
+from dataclasses import dataclass
+from typing import List
+from pydantic import BaseModel, field_validator
+
+class VariationTrafficDto(BaseModel):
+  variationId: int
+  traffic: int
+
+class TrafficAllocationRequestDto(BaseModel):
+  allocations: List[VariationTrafficDto]
+
+  @field_validator('allocations')
+  def validate_total_traffic(cls, v):
+    total = sum(item.traffic for item in v)
+    if total != 100:
+      raise ValueError(f"Total traffic allocation must equal 100%. Current total: {total}%!")
+    return v
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\variation\dtos\VariationCreateRequestDto.py
+from dataclasses import dataclass
+from typing import Optional
+from pydantic import constr
+
+@dataclass
+class VariationCreateRequestDto:
+  title: constr(min_length=1) # type: ignore
+  js: Optional[str] = None
+  css: Optional[str] = None
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\variation\dtos\VariationResponseDto.py
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class VariationResponseDto:
+  id: int
+  experimentId: int
+  title: str
+  traffic: int
+  js: Optional[str]
+  css: Optional[str]
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\variation\dtos\VariationUpdateRequestDto.py
+from typing import Optional
+from pydantic import BaseModel, model_validator, constr
+
+class VariationUpdateRequestDto(BaseModel):
+  title: Optional[str] = None
+  js: Optional[str] = None
+  css: Optional[str] = None
+
+  @model_validator(mode='after')
+  def check_at_least_one_field(self):
+    if not any(value is not None for value in self.__dict__.values()):
+      raise ValueError("At least one field (title, js, css) must be provided!")
+    return self
+
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\variation\model\Variation.py
 from sqlmodel import Field, SQLModel, Relationship
 from sqlalchemy import Text, Column, DateTime, func
@@ -3272,6 +3725,175 @@ class Variation(SQLModel, table=True):
       DateTime(timezone=True), onupdate=func.now(), nullable=True
     )
   )
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\variation\repository\VariationRepository.py
+from abc import ABC, abstractmethod
+from src.variation.model.Variation import Variation
+
+class VariationRepository(ABC):
+  
+  @abstractmethod
+  def add(self, variation: Variation) -> Variation:
+    pass
+
+  @abstractmethod
+  def getByExperimentId(self, experimentId: int) -> list[Variation]:
+    pass
+    
+  @abstractmethod
+  def saveAll(self, variations: list[Variation]) -> list[Variation]:
+    pass
+
+  @abstractmethod
+  def getById(self, id: int) -> Variation:
+    pass
+
+  @abstractmethod
+  def edit(self, variation: Variation) -> Variation:
+    pass
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\variation\repository\VariationRepositoryImp.py
+from src.variation.repository.VariationRepository import VariationRepository
+from src.variation.model.Variation import Variation
+from db import DBSessionDep
+from sqlmodel import select
+from fastapi import status, HTTPException
+
+class VariationRepositoryImp(VariationRepository):
+  def __init__(self, db: DBSessionDep):
+    self.db = db
+
+  def add(self, variation: Variation) -> Variation:
+    self.db.add(variation)
+    self.db.commit()
+    self.db.refresh(variation)
+    return variation
+
+  def getByExperimentId(self, experimentId: int) -> list[Variation]:
+    return self.db.exec(
+      select(Variation).where(Variation.experimentId == experimentId)
+    ).all()
+
+  def saveAll(self, variations: list[Variation]) -> list[Variation]:
+    for v in variations:
+      self.db.add(v)
+    self.db.commit()
+    for v in variations:
+      self.db.refresh(v)
+    return variations
+
+  def getById(self, id: int) -> Variation:
+    variation = self.db.get(Variation, id)
+    if not variation:
+      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variation not found")
+    return variation
+
+  def edit(self, variation: Variation) -> Variation:
+    self.db.add(variation)
+    self.db.commit()
+    self.db.refresh(variation)
+    return variation
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\variation\services\VariationService.py
+from src.variation.repository.VariationRepository import VariationRepository
+from src.experiment.repository.ExperimentRepository import ExperimentRepository
+from src.variation.dtos.VariationCreateRequestDto import VariationCreateRequestDto
+from src.variation.dtos.VariationResponseDto import VariationResponseDto
+from src.variation.dtos.VariationUpdateRequestDto import VariationUpdateRequestDto
+from src.variation.dtos.TrafficAllocationRequestDto import TrafficAllocationRequestDto
+from src.variation.model.Variation import Variation
+from fastapi import HTTPException, status
+
+class VariationService:
+  def __init__(
+    self, 
+    repo: VariationRepository,
+    experimentRepo: ExperimentRepository
+  ):
+    self.repo = repo
+    self.experimentRepo = experimentRepo
+
+  def createVariation(self, experimentId: int, reqDto: VariationCreateRequestDto) -> VariationResponseDto:
+    self.experimentRepo.getById(experimentId)
+    variations = self.repo.getByExperimentId(experimentId)
+
+    newVariation = Variation(
+      title=reqDto.title,
+      js=reqDto.js,
+      css=reqDto.css,
+      experimentId=experimentId,
+      traffic=0 
+    )
+    
+    variations.append(newVariation)
+    self._distributeTrafficEvenly(variations)
+    self.repo.saveAll(variations)
+
+    return self._mapToResponse(newVariation)
+
+  # 1. Update a single variation (Title, JS, CSS)
+  def updateVariation(self, id: int, reqDto: VariationUpdateRequestDto) -> VariationResponseDto:
+    variation = self.repo.getById(id)
+
+    if reqDto.title is not None:
+      variation.title = reqDto.title
+    if reqDto.js is not None:
+      variation.js = reqDto.js
+    if reqDto.css is not None:
+      variation.css = reqDto.css
+
+    updatedVar = self.repo.edit(variation)
+    return self._mapToResponse(updatedVar)
+
+  # 2. Update Traffic Allocation for the whole experiment
+  def updateTrafficAllocation(self, experimentId: int, reqDto: TrafficAllocationRequestDto) -> list[VariationResponseDto]:
+    # Fetch all actual variations from DB
+    dbVariations = self.repo.getByExperimentId(experimentId)
+    if not dbVariations:
+       raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No variations found for this experiment")
+
+    # Create a map for quick lookup
+    dbVarMap = {v.id: v for v in dbVariations}
+    
+    # Input validation: Ensure user sent allocations for ALL existing variations
+    inputIds = set(a.variationId for a in reqDto.allocations)
+    existingIds = set(dbVarMap.keys())
+
+    if inputIds != existingIds:
+      raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST, 
+        detail="Traffic allocation must include all variations belonging to this experiment"
+      )
+
+    # Apply updates
+    for alloc in reqDto.allocations:
+      variation = dbVarMap[alloc.variationId]
+      variation.traffic = alloc.traffic
+    
+    # Save changes
+    self.repo.saveAll(dbVariations)
+
+    return [self._mapToResponse(v) for v in dbVariations]
+
+  # Helper: Distribute logic (used in creation)
+  def _distributeTrafficEvenly(self, variations: list[Variation]):
+    count = len(variations)
+    if count > 0:
+      base_traffic = 100 // count
+      remainder = 100 % count
+      for i, var in enumerate(variations):
+        extra = 1 if i < remainder else 0
+        var.traffic = base_traffic + extra
+
+  def _mapToResponse(self, v: Variation) -> VariationResponseDto:
+    return VariationResponseDto(
+      id=v.id,
+      experimentId=v.experimentId, # type: ignore
+      title=v.title,
+      traffic=v.traffic, # type: ignore
+      js=v.js,
+      css=v.css
+    )
 
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\static\menu.json
 [

@@ -15,6 +15,8 @@ from src.project import ProjectRouter
 from src.org import OrgRouter
 from src.experiment import ExperimentRouter 
 from src.variation import VariationRouter
+from src.condition import ConditionRouter
+from src.metrics import MetricsRouter
 from core import app
 
 # IMPORT Models
@@ -43,6 +45,8 @@ app.include_router(ActionRouter.routes, dependencies=[Depends(getEmail), Depends
 app.include_router(ProjectRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
 app.include_router(ExperimentRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
 app.include_router(VariationRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
+app.include_router(ConditionRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
+app.include_router(MetricsRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
 app.include_router(AuthRouter.routes)
 app.include_router(UserInsecureRouter.routes)
 app.include_router(OrgRouter.routes)

@@ -24,6 +24,10 @@ from src.experiment.services.ExperimentService import ExperimentService
 from src.experiment.repository.ExperimentRepositoryImp import ExperimentRepositoryImp
 from src.variation.services.VariationService import VariationService
 from src.variation.repository.VariationRepositoryImp import VariationRepositoryImp
+from src.condition.services.ConditionService import ConditionService
+from src.condition.repository.ConditionRepositoryImp import ConditionRepositoryImp
+from src.metrics.services.MetricsService import MetricsService
+from src.metrics.repository.MetricsRepositoryImp import MetricsRepositoryImp
 
 def getUserService(db: DBSessionDep, bgTask: BackgroundTasks) -> UserService:
   crypto = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -90,6 +94,16 @@ def getVariationService(db: DBSessionDep) -> VariationService:
   experimentRepo = ExperimentRepositoryImp(db)
   return VariationService(repo, experimentRepo)
 
+def getConditionService(db: DBSessionDep) -> ConditionService:
+  repo = ConditionRepositoryImp(db)
+  experimentRepo = ExperimentRepositoryImp(db)
+  return ConditionService(repo, experimentRepo)
+
+def getMetricsService(db: DBSessionDep) -> MetricsService:
+  repo = MetricsRepositoryImp(db)
+  experimentRepo = ExperimentRepositoryImp(db)
+  return MetricsService(repo, experimentRepo)
+
 UserServiceDep = Annotated[UserService, Depends(getUserService)]
 MenuServiceDep = Annotated[MenuService, Depends(getMenuService)]
 AuthServiceDep = Annotated[AuthService, Depends(getAuthService)]
@@ -99,3 +113,5 @@ ProjectServiceDep = Annotated[ProjectService, Depends(getProjectService)]
 OrgServiceDep = Annotated[OrgService, Depends(getOrgService)]
 ExperimentServiceDep = Annotated[ExperimentService, Depends(getExperimentService)]
 VariationServiceDep = Annotated[VariationService, Depends(getVariationService)]
+ConditionServiceDep = Annotated[ConditionService, Depends(getConditionService)]
+MetricsServiceDep = Annotated[MetricsService, Depends(getMetricsService)]

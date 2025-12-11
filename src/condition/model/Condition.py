@@ -10,7 +10,6 @@ class Condition(SQLModel, table=True):
   id: int = Field(default=None, primary_key=True)
   urls: List[HttpUrl] = Field(sa_column=Column(ARRAY(String), nullable=True))
   operator: Operator = Field(default=Operator.CONTAIN)
-  # FIX #3: Changed back_populates from "Conditions" to "conditions" to match Experiment model
   experiment: Optional["Experiment"] = Relationship(back_populates="conditions") # type: ignore
   experimentId: Optional[int] = Field(default=None, foreign_key="experiment.id")
   createdAt: Optional[datetime] = Field(
