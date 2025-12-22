@@ -189,10 +189,8 @@ Industry-standard tool for local object storage (like Google Cloud Storage or AW
 - Open the UI: Go to http://localhost:9001
 - Login:
 
-  - User:
-    admin
-  - Pass:
-    admin
+  - User: admin
+  - Pass: admin
 
 - Create a Bucket: You must create the bucket (e.g., ab-bucket) in the UI before your code tries to upload to it.
 
