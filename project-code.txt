@@ -32,7 +32,7 @@ __pycache__/
 .coverage
 
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\.env.dev
-DB_URL="postgresql://postgres:5432@localhost:5432/pyadmin"
+DB_URL="postgresql://abuser:123456@db:5432/abdb"
 # DB_URL = 'sqlite:///db.sqlite'
 SECRET_KEY="09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
 ALGORITHM="HS256"
@@ -48,6 +48,12 @@ PASSWORD=55hg6qhuxqzodsdu
 SENDER=pyadmin@mail.com
 
 OTP_EXPIRY_DURATION=180
+
+REDIS_URL=redis://redis:6379/0
+
+MAX_TRAFFIC_VAL = 10000
+
+
 
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\.gitignore
 .venv
@@ -249,6 +255,18 @@ from src.experiment.services.ExperimentService import ExperimentService
 from src.experiment.repository.ExperimentRepositoryImp import ExperimentRepositoryImp
 from src.variation.services.VariationService import VariationService
 from src.variation.repository.VariationRepositoryImp import VariationRepositoryImp
+from src.condition.services.ConditionService import ConditionService
+from src.condition.repository.ConditionRepositoryImp import ConditionRepositoryImp
+from src.metrics.services.MetricsService import MetricsService
+from src.metrics.repository.MetricsRepositoryImp import MetricsRepositoryImp
+from src.bucket.repository.BucketRepositoryImp import BucketRepositoryImp
+from src.decision.services.DecisionService import DecisionService
+from src.utils.CacheService import CacheService
+
+def getCacheService() -> CacheService:
+  return CacheService()
+
+CacheServiceDep = Annotated[CacheService, Depends(getCacheService)]
 
 def getUserService(db: DBSessionDep, bgTask: BackgroundTasks) -> UserService:
   crypto = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -315,6 +333,21 @@ def getVariationService(db: DBSessionDep) -> VariationService:
   experimentRepo = ExperimentRepositoryImp(db)
   return VariationService(repo, experimentRepo)
 
+def getConditionService(db: DBSessionDep, cache: CacheServiceDep) -> ConditionService:
+  repo = ConditionRepositoryImp(db)
+  experimentRepo = ExperimentRepositoryImp(db)
+  return ConditionService(repo, experimentRepo, cache)
+
+def getMetricsService(db: DBSessionDep) -> MetricsService:
+  repo = MetricsRepositoryImp(db)
+  experimentRepo = ExperimentRepositoryImp(db)
+  return MetricsService(repo, experimentRepo)
+
+def getDecisionService(db: DBSessionDep, cache: CacheServiceDep) -> DecisionService:
+  bucketRepo = BucketRepositoryImp(db)
+  experimentRepo = ExperimentRepositoryImp(db)
+  return DecisionService(bucketRepo, experimentRepo, cache)
+
 UserServiceDep = Annotated[UserService, Depends(getUserService)]
 MenuServiceDep = Annotated[MenuService, Depends(getMenuService)]
 AuthServiceDep = Annotated[AuthService, Depends(getAuthService)]
@@ -324,6 +357,10 @@ ProjectServiceDep = Annotated[ProjectService, Depends(getProjectService)]
 OrgServiceDep = Annotated[OrgService, Depends(getOrgService)]
 ExperimentServiceDep = Annotated[ExperimentService, Depends(getExperimentService)]
 VariationServiceDep = Annotated[VariationService, Depends(getVariationService)]
+ConditionServiceDep = Annotated[ConditionService, Depends(getConditionService)]
+MetricsServiceDep = Annotated[MetricsService, Depends(getMetricsService)]
+DecisionServiceDep = Annotated[DecisionService, Depends(getDecisionService)]
+
 
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\docker-compose.yml
 version: "3.8"
@@ -333,15 +370,13 @@ services:
     build: .
     ports:
       - "8000:8000"
-    # Change #1: Removed code volume mount for production. Uncomment for development only.
-    # volumes:
-    #   - .:/app
-    # Add this line to load environment variables from the .env.dev file
     env_file:
       - .env.dev
     depends_on:
-      - db
-    # Change #2: Removed --reload for production. Add back for development hot reload.
+      db:
+        condition: service_healthy # Wait for DB to be actually ready
+      redis:
+        condition: service_started # Wait for Redis container
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
   db:
@@ -349,11 +384,22 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=pyadmin
+      - POSTGRES_USER=abuser
+      - POSTGRES_PASSWORD=123456
+      - POSTGRES_DB=abdb
     ports:
-      - "5432:5432"
+      - "5433:5432"
+    # CRITICAL: Healthcheck prevents app from connecting before DB is ready
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
 
 volumes:
   postgres_data:
@@ -370,30 +416,28 @@ ENV PYTHONUNBUFFERED 1
 # Set the working directory in the container
 WORKDIR /app
 
-# Install system dependencies needed for building packages
-# This layer will be cached and only run when this command changes
-RUN apt-get update && apt-get install -y build-essential libpq-dev \
-    # Change #3: Clean up apt cache to reduce image size
+# Install system dependencies
+# libpq-dev is required to compile psycopg2 from source
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy only the requirements file first
+# Copy only the requirements file first to leverage Docker caching
 COPY requirements.txt .
 
-# Install Python dependencies. This layer will only be rebuilt
-# if the requirements.txt file changes.
-RUN pip install --no-cache-dir psycopg2-binary && \
-    pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies.
+# Note: Ensure 'psycopg2', 'mmh3', and 'redis' are in your requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Now, copy the rest of the application code. This is the part
-# that will change most often.
+# Now, copy the rest of the application code.
 COPY . .
 
-# Expose the port the app runs on
+# Expose the port
 EXPOSE 8000
 
-# Command to run the application using uvicorn
+# Command to run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-
 
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\main.py
 from fastapi import Depends, Header
@@ -413,6 +457,9 @@ from src.project import ProjectRouter
 from src.org import OrgRouter
 from src.experiment import ExperimentRouter 
 from src.variation import VariationRouter
+from src.condition import ConditionRouter
+from src.metrics import MetricsRouter
+from src.decision import DecisionRouter
 from core import app
 
 # IMPORT Models
@@ -441,6 +488,9 @@ app.include_router(ActionRouter.routes, dependencies=[Depends(getEmail), Depends
 app.include_router(ProjectRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
 app.include_router(ExperimentRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
 app.include_router(VariationRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
+app.include_router(ConditionRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
+app.include_router(MetricsRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
+app.include_router(DecisionRouter.routes)
 app.include_router(AuthRouter.routes)
 app.include_router(UserInsecureRouter.routes)
 app.include_router(OrgRouter.routes)
@@ -540,13 +590,14 @@ psycopg2==2.9.10
 alembic==1.15.2
 sqlmodel==0.0.24
 python-dotenv==1.1.0
-# Pinned bcrypt and passlib for compatibility (fixes AttributeError: module 'bcrypt' has no attribute '__about__')
 bcrypt==4.1.2
 passlib[bcrypt]==1.7.4
 pyjwt==2.10.1
 fastapi[standard]
 gunicorn
 httptools==0.7.1
+mmh3==5.2.0
+redis==5.0.1
 
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\migrations\env.py
 from logging.config import fileConfig
@@ -1173,6 +1224,130 @@ class Bucket(SQLModel, table=True):
     )
   )
 
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\bucket\repository\BucketRepository.py
+from abc import ABC, abstractmethod
+from src.bucket.model.Bucket import Bucket
+
+class BucketRepository(ABC):
+  
+  @abstractmethod
+  def get(self, experimentId: int, endUserId: int) -> Bucket | None:
+    pass
+
+  @abstractmethod
+  def add(self, bucket: Bucket) -> Bucket:
+    pass
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\bucket\repository\BucketRepositoryImp.py
+from src.bucket.repository.BucketRepository import BucketRepository
+from src.bucket.model.Bucket import Bucket
+from db import DBSessionDep
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import select
+
+class BucketRepositoryImp(BucketRepository):
+  def __init__(self, db: DBSessionDep):
+    self.db = db
+
+  def get(self, experimentId: int, endUserId: int) -> Bucket | None:
+    return self.db.exec(
+      select(Bucket)
+      .where(Bucket.expId == experimentId)
+      .where(Bucket.endUserId == endUserId)
+    ).first()
+
+  def add(self, bucket: Bucket) -> Bucket:
+    try:
+      self.db.add(bucket)
+      self.db.commit()
+      self.db.refresh(bucket)
+      return bucket
+    except IntegrityError:
+      # If we hit a Unique Constraint error (Duplicate), 
+      # it means another request just saved it.
+      # We rollback the failed transaction and return the existing one.
+      self.db.rollback()
+      existing = self.get(bucket.expId, bucket.endUserId)
+      return existing
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\condition\ConditionRouter.py
+from fastapi import APIRouter
+from di import ConditionServiceDep
+from src.condition.dtos.ConditionCreateRequestDto import ConditionCreateRequestDto
+from src.condition.dtos.ConditionResponseDto import ConditionResponseDto
+
+routes = APIRouter()
+
+@routes.post(
+  "/experiments/{experimentId}/conditions", 
+  response_model=ConditionResponseDto, 
+  tags=["condition"],
+  name="act:create-condition"
+)
+async def createCondition(
+    experimentId: int,
+    reqDto: ConditionCreateRequestDto,
+    service: ConditionServiceDep
+  ) -> ConditionResponseDto:
+  return service.createCondition(experimentId, reqDto)
+
+@routes.get(
+  "/experiments/{experimentId}/conditions", 
+  response_model=list[ConditionResponseDto], 
+  tags=["condition"],
+  name="act:get-conditions"
+)
+async def getConditions(
+    experimentId: int,
+    service: ConditionServiceDep
+  ) -> list[ConditionResponseDto]:
+  return service.getConditions(experimentId)
+
+@routes.delete(
+  "/conditions/{id}", 
+  response_model=ConditionResponseDto, 
+  tags=["condition"],
+  name="act:delete-condition"
+)
+async def deleteCondition(
+    id: int,
+    service: ConditionServiceDep
+  ) -> ConditionResponseDto:
+  return service.deleteCondition(id)
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\condition\dtos\ConditionCreateRequestDto.py
+from typing import List
+from pydantic import BaseModel, field_validator, HttpUrl, TypeAdapter, ValidationError
+from src.condition.model.Operator import Operator
+
+class ConditionCreateRequestDto(BaseModel):
+  urls: List[str]
+  operator: Operator
+
+  @field_validator('urls')
+  def validate_urls(cls, v):
+    if not v:
+      raise ValueError("The list of URLs cannot be empty!")
+
+    for url in v:
+      try:
+        TypeAdapter(HttpUrl).validate_python(url)
+      except ValidationError:
+        raise ValueError(f"Invalid URL format: {url}!")
+    return v
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\condition\dtos\ConditionResponseDto.py
+from dataclasses import dataclass
+from typing import List
+from src.condition.model.Operator import Operator
+
+@dataclass
+class ConditionResponseDto:
+  id: int
+  experimentId: int
+  urls: List[str]
+  operator: Operator
+
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\condition\model\Condition.py
 from sqlmodel import Field, SQLModel, ARRAY, String, Relationship
 from typing import Optional, List
@@ -1186,7 +1361,6 @@ class Condition(SQLModel, table=True):
   id: int = Field(default=None, primary_key=True)
   urls: List[HttpUrl] = Field(sa_column=Column(ARRAY(String), nullable=True))
   operator: Operator = Field(default=Operator.CONTAIN)
-  # FIX #3: Changed back_populates from "Conditions" to "conditions" to match Experiment model
   experiment: Optional["Experiment"] = Relationship(back_populates="conditions") # type: ignore
   experimentId: Optional[int] = Field(default=None, foreign_key="experiment.id")
   createdAt: Optional[datetime] = Field(
@@ -1208,6 +1382,133 @@ class Operator(StrEnum):
   CONTAIN = "CONTAIN"
   IS = "IS"
   IS_NOT = "IS_NOT"
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\condition\repository\ConditionRepository.py
+from abc import ABC, abstractmethod
+from src.condition.model.Condition import Condition
+
+class ConditionRepository(ABC):
+  
+  @abstractmethod
+  def add(self, condition: Condition) -> Condition:
+    pass
+
+  @abstractmethod
+  def getByExperimentId(self, experimentId: int) -> list[Condition]:
+    pass
+
+  @abstractmethod
+  def getById(self, id: int) -> Condition:
+    pass
+
+  @abstractmethod
+  def delete(self, condition: Condition):
+    pass
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\condition\repository\ConditionRepositoryImp.py
+from src.condition.repository.ConditionRepository import ConditionRepository
+from src.condition.model.Condition import Condition
+from db import DBSessionDep
+from sqlmodel import select
+from fastapi import status, HTTPException
+
+class ConditionRepositoryImp(ConditionRepository):
+  def __init__(self, db: DBSessionDep):
+    self.db = db
+
+  def add(self, condition: Condition) -> Condition:
+    self.db.add(condition)
+    self.db.commit()
+    self.db.refresh(condition)
+    return condition
+
+  def getByExperimentId(self, experimentId: int) -> list[Condition]:
+    return self.db.exec(
+      select(Condition).where(Condition.experimentId == experimentId)
+    ).all()
+
+  def getById(self, id: int) -> Condition:
+    condition = self.db.get(Condition, id)
+    if not condition:
+      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Condition not found")
+    return condition
+
+  def delete(self, condition: Condition):
+    self.db.delete(condition)
+    self.db.commit()
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\condition\services\ConditionService.py
+from src.condition.repository.ConditionRepository import ConditionRepository
+from src.experiment.repository.ExperimentRepository import ExperimentRepository
+from src.condition.dtos.ConditionCreateRequestDto import ConditionCreateRequestDto
+from src.condition.dtos.ConditionResponseDto import ConditionResponseDto
+from src.condition.model.Condition import Condition
+from src.utils.CacheService import CacheService
+from fastapi import HTTPException, status
+
+class ConditionService:
+  def __init__(
+    self, 
+    repo: ConditionRepository,
+    experimentRepo: ExperimentRepository,
+    cacheService: CacheService
+  ):
+    self.repo = repo
+    self.experimentRepo = experimentRepo
+    self.cache = cacheService
+
+  def createCondition(
+      self, 
+      experimentId: int, 
+      reqDto: ConditionCreateRequestDto
+    ) -> ConditionResponseDto:
+    # Check if experiment exists
+    experiment = self.experimentRepo.getById(experimentId)
+    if not experiment:
+      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found")
+
+    newCondition = Condition(
+      experimentId=experimentId,
+      operator=reqDto.operator,
+      urls=reqDto.urls
+    )
+    
+    savedCondition = self.repo.add(newCondition)
+    
+    # 3. INVALIDATE CACHE
+    # The targeting rules have changed. We must clear the cache for this project.
+    self.invalidateProjectCache(experiment.projectId)
+    
+    return self.mapToResponse(savedCondition)
+
+  def deleteCondition(self, id: int) -> ConditionResponseDto:
+    condition = self.repo.getById(id)
+    if not condition:
+      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Condition not found!")
+        
+    # We need the experiment to find the projectId
+    experiment = self.experimentRepo.getById(condition.experimentId)
+    
+    self.repo.delete(condition)
+    
+    # 3. INVALIDATE CACHE
+    if experiment:
+      self.invalidateProjectCache(experiment.projectId)
+        
+    return self.mapToResponse(condition)
+
+  # Helper to keep code clean
+  def invalidateProjectCache(self, projectId: int):
+    cacheKey = f"project:{projectId}:active_experiments"
+    self.cache.delete(cacheKey)
+
+  def mapToResponse(self, c: Condition) -> ConditionResponseDto:
+    return ConditionResponseDto(
+      id=c.id,
+      experimentId=c.experimentId,
+      urls=c.urls,
+      operator=c.operator
+    )
 
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\db\links\PermissionType.py
 from enum import StrEnum
@@ -1323,6 +1624,286 @@ class UserProjectLinkRepositoryImp(UserProjectLinkRepository):
       .where(UserProjectLink.userId == userId)
       .where(UserProjectLink.projectId == projectId)
     ).first()
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\decision\DecisionRouter.py
+from fastapi import APIRouter, Request, status, HTTPException, BackgroundTasks
+from di import DecisionServiceDep, ProjectServiceDep
+from src.decision.dtos.DecisionRequestDto import DecisionRequestDto
+from src.decision.dtos.DecisionResponseDto import DecisionResponseDto
+
+routes = APIRouter()
+
+@routes.post(
+  "/decision", 
+  tags=["decision"],
+  name="act:make-decision",
+  response_model=DecisionResponseDto
+)
+async def makeDecision(
+  reqDto: DecisionRequestDto, 
+  decisionService: DecisionServiceDep,
+  request: Request,
+  bgTasks: BackgroundTasks # Change: Inject BackgroundTasks
+) -> DecisionResponseDto:
+  
+  projectIdHeader = request.headers.get("project-id")
+  if not projectIdHeader:
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Project ID header required")
+  
+  try:
+    projectId = int(projectIdHeader)
+  except ValueError:
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Project ID format")
+
+  # Pass bgTasks to service
+  return decisionService.makeDecision(reqDto, projectId, bgTasks)
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\decision\dtos\DecisionRequestDto.py
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class DecisionRequestDto:
+  url: str
+  endUserId: Optional[int] = None
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\decision\dtos\DecisionResponseDto.py
+from dataclasses import dataclass
+from typing import List, Optional
+from src.condition.dtos.ConditionResponseDto import ConditionResponseDto
+from src.metrics.dtos.MetricsResponseDto import MetricsResponseDto
+
+@dataclass
+class VariationDecisionDto:
+  variationId: int
+  variationTitle: str
+  js: Optional[str]
+  css: Optional[str]
+
+@dataclass
+class ExperimentDecisionDto:
+  experimentId: int
+  experimentTitle: str
+  experimentJs: Optional[str]
+  experimentCss: Optional[str]
+  variation: VariationDecisionDto
+  conditions: List[ConditionResponseDto]
+  metrics: List[MetricsResponseDto]
+
+@dataclass
+class DecisionResponseDto:
+  endUserId: int
+  decisions: List[ExperimentDecisionDto]
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\decision\services\DecisionService.py
+import mmh3
+import random
+from fastapi import BackgroundTasks
+from src.bucket.repository.BucketRepository import BucketRepository
+from src.experiment.repository.ExperimentRepository import ExperimentRepository
+from src.decision.dtos.DecisionRequestDto import DecisionRequestDto
+from src.decision.dtos.DecisionResponseDto import DecisionResponseDto, ExperimentDecisionDto, VariationDecisionDto
+from src.bucket.model.Bucket import Bucket
+from src.experiment.model.Experiment import Experiment
+from src.experiment.model.ExperimentStatus import ExperimentStatus
+from src.condition.model.Operator import Operator
+from src.metrics.dtos.MetricsResponseDto import MetricsResponseDto
+from src.condition.dtos.ConditionResponseDto import ConditionResponseDto
+from src.utils.CacheService import CacheService
+from src.variation.model.Variation import Variation
+from src.condition.model.Condition import Condition
+from src.metrics.model.Metrics import Metrics
+from config import Config
+
+class DecisionService:
+  # The bucketing scale (1 to 10,000 for 0.01% granularity)
+  MAX_TRAFFIC_VAL = Config.getValByKey("MAX_TRAFFIC_VAL")
+
+  def __init__(
+    self, 
+    bucketRepo: BucketRepository,
+    experimentRepo: ExperimentRepository,
+    cacheService: CacheService
+  ):
+    self.bucketRepo = bucketRepo
+    self.experimentRepo = experimentRepo
+    self.cache = cacheService
+
+  def makeDecision(
+      self, 
+      reqDto: DecisionRequestDto, 
+      projectId: int, 
+      bgTasks: BackgroundTasks
+    ) -> DecisionResponseDto:
+    
+    # 1. Identity Management
+    endUserId = reqDto.endUserId if reqDto.endUserId else random.randint(100000, 999999)
+
+    # 2. Fetch Active Experiments (Redis Cache -> DB)
+    activeExperiments = self.getActiveExperiments(projectId)
+
+    decisions: list[ExperimentDecisionDto] = []
+
+    for exp in activeExperiments:
+      # 3. Targeting Check
+      if not self.checkTargeting(exp, reqDto.url):
+        continue
+
+      # 4. Consistency Check (Sticky Bucketing)
+      existingBucket = self.bucketRepo.get(experimentId=exp.id, endUserId=endUserId)
+
+      if existingBucket:
+        # User is already locked in. Return the saved variation.
+        assignedVariation = next((v for v in exp.variations if v.id == existingBucket.variationId), None)
+        if assignedVariation:
+          decisions.append(self.buildDecisionDto(exp, assignedVariation))
+      
+      else:
+        # 5. The Bucketing Machine
+        hashKey = f"{endUserId}:{exp.id}"
+        hashInt = mmh3.hash(hashKey)
+        
+        # Scale hash to 1 - 10,000
+        bucketVal = (abs(hashInt) % self.MAX_TRAFFIC_VAL) + 1
+        
+        # 6. Traffic Allocation
+        chosenVariation = None
+        cumulativeTraffic = 0
+
+        for variation in exp.variations:
+          rangeLimit = int(variation.traffic * 100)
+          
+          if bucketVal <= (cumulativeTraffic + rangeLimit):
+            chosenVariation = variation
+            break
+          
+          cumulativeTraffic += rangeLimit
+
+        if chosenVariation:
+          # 7. Async Persistence
+          bgTasks.add_task(self.recordAssignment, exp.id, endUserId, chosenVariation.id)
+          decisions.append(self.buildDecisionDto(exp, chosenVariation))
+
+    return DecisionResponseDto(endUserId=endUserId, decisions=decisions)
+
+  def recordAssignment(self, expId: int, userId: int, varId: int):
+    # Runs in background. Checks for duplicates before inserting.
+    existing = self.bucketRepo.get(expId, userId)
+    if not existing:
+      self.bucketRepo.add(Bucket(expId=expId, endUserId=userId, variationId=varId))
+
+  def checkTargeting(self, exp: Experiment, url: str) -> bool:
+    if not exp.conditions:
+      return True
+
+    matches = []
+    for cond in exp.conditions:
+      isMatch = False 
+      
+      if cond.operator in [Operator.IS, Operator.CONTAIN]:
+        for condUrl in cond.urls:
+          if cond.operator == Operator.CONTAIN and condUrl in url:
+            isMatch = True
+            break
+          if cond.operator == Operator.IS and condUrl == url:
+            isMatch = True
+            break
+             
+      elif cond.operator in [Operator.IS_NOT, Operator.NOT_CONTAIN]:
+        isMatch = True 
+        for condUrl in cond.urls:
+          if cond.operator == Operator.NOT_CONTAIN and condUrl in url:
+            isMatch = False
+            break 
+          if cond.operator == Operator.IS_NOT and condUrl == url:
+            isMatch = False
+            break 
+      
+      matches.append(isMatch)
+
+    if exp.conditionType == "ALL":
+      return all(matches)
+    else: # ANY
+      return any(matches)
+
+  def getActiveExperiments(self, projectId: int) -> list[Experiment]:
+    cacheKey = f"project:{projectId}:active_experiments"
+    
+    # 1. Try Redis Cache
+    cachedData = self.cache.get(cacheKey)
+    if cachedData:
+      return [self.deserializeExperiment(item) for item in cachedData]
+    
+    # 2. Cache Miss: Fetch from DB
+    allExperiments = self.experimentRepo.getAll(rows=1000, page=1, projectId=projectId)
+    activeExperiments = [e for e in allExperiments if e.status == ExperimentStatus.ACTIVE]
+    
+    # 3. Serialize and Save to Redis
+    serializedData = [self.serializeExperiment(e) for e in activeExperiments]
+    self.cache.set(cacheKey, serializedData, ttl=60)
+    
+    return activeExperiments
+
+  # Helper: Convert DB Object to Dictionary for Redis
+  def serializeExperiment(self, exp: Experiment) -> dict:
+    return {
+      "id": exp.id,
+      "title": exp.title,
+      "status": exp.status,
+      "js": exp.js,
+      "css": exp.css,
+      "conditionType": exp.conditionType,
+      "conditions": [c.model_dump() for c in exp.conditions],
+      "metrics": [m.model_dump() for m in exp.metrics],
+      "variations": [v.model_dump() for v in exp.variations]
+    }
+
+  # Helper: Convert Dictionary back to DB Object
+  def deserializeExperiment(self, data: dict) -> Experiment:
+    # Manually reconstruct objects to keep relationships valid
+    exp = Experiment(**data)
+    # Reconstruct relationships from nested lists
+    exp.conditions = [Condition(**c) for c in data.get("conditions", [])]
+    exp.metrics = [Metrics(**m) for m in data.get("metrics", [])]
+    exp.variations = [Variation(**v) for v in data.get("variations", [])]
+    return exp
+
+  def buildDecisionDto(self, exp: Experiment, variation) -> ExperimentDecisionDto:
+    condDtos = [
+      ConditionResponseDto(
+        id=c.id, 
+        experimentId=c.experimentId, 
+        urls=[str(u) for u in c.urls], 
+        operator=c.operator
+      ) for c in exp.conditions
+    ]
+    
+    metDtos = [
+      MetricsResponseDto(
+        id=m.id, 
+        experimentId=m.experimentId, 
+        title=m.title, 
+        custom=m.custom, 
+        selector=m.selector, 
+        description=m.description, 
+        triggered=m.triggered
+      ) for m in exp.metrics
+    ]
+
+    return ExperimentDecisionDto(
+      experimentId=exp.id,
+      experimentTitle=exp.title,
+      experimentJs=exp.js,
+      experimentCss=exp.css,
+      variation=VariationDecisionDto(
+        variationId=variation.id,
+        variationTitle=variation.title,
+        js=variation.js,
+        css=variation.css
+      ),
+      conditions=condDtos,
+      metrics=metDtos
+    )
 
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\email\EmailService.py
 import smtplib
@@ -1655,13 +2236,19 @@ class ExperimentRepository(ABC):
   def edit(self, experiment: Experiment) -> Experiment:
     pass
 
+  @abstractmethod
+  def getAllActive(self, rows: int, page: int, projectId: int) -> list[Experiment]:
+    pass
+
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\experiment\repository\ExperimentRepositoryImp.py
+from src.experiment.model.ExperimentStatus import ExperimentStatus
 from src.experiment.repository.ExperimentRepository import ExperimentRepository
 from src.experiment.model.Experiment import Experiment
 from db import DBSessionDep
 from fastapi import status, HTTPException
 from sqlmodel import select
 from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 
 class ExperimentRepositoryImp(ExperimentRepository):
   def __init__(self, db: DBSessionDep):
@@ -1698,6 +2285,20 @@ class ExperimentRepositoryImp(ExperimentRepository):
     self.db.commit()
     self.db.refresh(experiment)
     return experiment
+  
+  def getAllActive(self, rows: int, page: int, projectId: int) -> list[Experiment]:
+    offset: int = (page - 1) * rows
+    return self.db.exec(
+      select(Experiment)
+      .where(Experiment.projectId == projectId)
+      .where(Experiment.status == ExperimentStatus.ACTIVE)
+      .options(
+          selectinload(Experiment.conditions),
+          selectinload(Experiment.variations),
+          selectinload(Experiment.metrics)
+      )
+      .offset(offset).limit(rows)
+    ).all()
 
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\experiment\services\ExperimentService.py
 from src.experiment.repository.ExperimentRepository import ExperimentRepository
@@ -2223,6 +2824,103 @@ class MenuTemplateService:
 
     return PaginationResponseDto[MenuTemplateResponseDto](items=mtResponseDtoList, total=total)
 
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\metrics\MetricsRouter.py
+from fastapi import APIRouter
+from di import MetricsServiceDep
+from src.metrics.dtos.MetricsCreateRequestDto import MetricsCreateRequestDto
+from src.metrics.dtos.MetricsResponseDto import MetricsResponseDto
+from src.metrics.dtos.MetricsTrackResponseDto import MetricsTrackResponseDto
+
+routes = APIRouter()
+
+@routes.post(
+  "/experiments/{experimentId}/metrics", 
+  response_model=MetricsResponseDto, 
+  tags=["metrics"],
+  name="act:create-metric"
+)
+async def createMetric(
+    experimentId: int,
+    reqDto: MetricsCreateRequestDto,
+    service: MetricsServiceDep
+  ) -> MetricsResponseDto:
+  return service.createMetric(experimentId, reqDto)
+
+@routes.get(
+  "/experiments/{experimentId}/metrics", 
+  response_model=list[MetricsResponseDto], 
+  tags=["metrics"],
+  name="act:get-metrics"
+)
+async def getMetrics(
+    experimentId: int,
+    service: MetricsServiceDep
+  ) -> list[MetricsResponseDto]:
+  return service.getMetrics(experimentId)
+
+@routes.delete(
+  "/metrics/{id}", 
+  response_model=MetricsResponseDto, 
+  tags=["metrics"],
+  name="act:delete-metric"
+) 
+async def deleteMetric(
+    id: int,
+    service: MetricsServiceDep
+  ) -> MetricsResponseDto:
+  return service.deleteMetric(id)
+
+@routes.post(
+  "/metrics/{id}/track", 
+  tags=["metrics"],
+  name="act:track-metric",
+  response_model=MetricsTrackResponseDto
+)
+async def trackMetric(
+    id: int,
+    service: MetricsServiceDep
+  ):
+  return service.trackMetric(id)
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\metrics\dtos\MetricsCreateRequestDto.py
+from typing import Optional
+from pydantic import BaseModel, model_validator
+
+class MetricsCreateRequestDto(BaseModel):
+  title: str
+  custom: bool = False
+  selector: Optional[str] = None
+  description: Optional[str] = None
+
+  @model_validator(mode='after')
+  def validate_selector(self):
+    # If it is NOT a custom event (meaning it tracks clicks/elements), a selector is required.
+    if not self.custom and not self.selector:
+      raise ValueError("Selector is required for non-custom metrics")
+    return self
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\metrics\dtos\MetricsResponseDto.py
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class MetricsResponseDto:
+  id: int
+  experimentId: int
+  title: str
+  custom: bool
+  selector: Optional[str]
+  description: Optional[str]
+  triggered: int
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\metrics\dtos\MetricsTrackResponseDto.py
+from dataclasses import dataclass
+
+@dataclass
+class MetricsTrackResponseDto:
+  message: str
+  triggered: bool = True
+
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\metrics\model\Metrics.py
 from sqlmodel import Field, SQLModel, Relationship
 from sqlalchemy import Column, DateTime, func
@@ -2235,7 +2933,6 @@ class Metrics(SQLModel, table=True):
   custom: bool = Field(default=False , nullable=False)
   selector: str = Field(default=None, nullable=True)
   triggered: int = Field(default=None, nullable=True)
-  # FIX #4: Changed back_populates from "Metrics" to "metrics" to match Experiment model
   experiment: Optional["Experiment"] = Relationship(back_populates="metrics") # type: ignore
   description: str = Field(default=None, nullable=True)
   experimentId: Optional[int] = Field(default=None, foreign_key="experiment.id")
@@ -2249,6 +2946,144 @@ class Metrics(SQLModel, table=True):
       DateTime(timezone=True), onupdate=func.now(), nullable=True
     )
   )
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\metrics\repository\MetricsRepository.py
+from abc import ABC, abstractmethod
+from src.metrics.model.Metrics import Metrics
+
+class MetricsRepository(ABC):
+  
+  @abstractmethod
+  def add(self, metric: Metrics) -> Metrics:
+    pass
+
+  @abstractmethod
+  def getByExperimentId(self, experimentId: int) -> list[Metrics]:
+    pass
+
+  @abstractmethod
+  def getById(self, id: int) -> Metrics:
+    pass
+
+  @abstractmethod
+  def delete(self, metric: Metrics):
+    pass
+
+  @abstractmethod
+  def incrementTrigger(self, id: int):
+    pass
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\metrics\repository\MetricsRepositoryImp.py
+from src.metrics.repository.MetricsRepository import MetricsRepository
+from src.metrics.model.Metrics import Metrics
+from db import DBSessionDep
+from sqlmodel import select
+from fastapi import status, HTTPException
+from sqlalchemy import update
+
+class MetricsRepositoryImp(MetricsRepository):
+  def __init__(self, db: DBSessionDep):
+    self.db = db
+
+  def add(self, metric: Metrics) -> Metrics:
+    self.db.add(metric)
+    self.db.commit()
+    self.db.refresh(metric)
+    return metric
+
+  def getByExperimentId(self, experimentId: int) -> list[Metrics]:
+    return self.db.exec(
+      select(Metrics).where(Metrics.experimentId == experimentId)
+    ).all()
+
+  def getById(self, id: int) -> Metrics:
+    metric = self.db.get(Metrics, id)
+    if not metric:
+      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Metric not found")
+    return metric
+
+  def delete(self, metric: Metrics):
+    self.db.delete(metric)
+    self.db.commit()
+
+  def incrementTrigger(self, id: int):
+    # This generates SQL: UPDATE metrics SET triggered = triggered + 1 WHERE id = :id
+    statement = (
+        update(Metrics)
+        .where(Metrics.id == id)
+        .values(triggered=Metrics.triggered + 1)
+    )
+    result = self.db.exec(statement)
+    self.db.commit()
+
+    # Check if a row was actually updated (to handle 404 silently or explicitly)
+    if result.rowcount == 0:
+      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Metric not found!")
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\metrics\services\MetricsService.py
+from src.metrics.repository.MetricsRepository import MetricsRepository
+from src.experiment.repository.ExperimentRepository import ExperimentRepository
+from src.metrics.dtos.MetricsCreateRequestDto import MetricsCreateRequestDto
+from src.metrics.dtos.MetricsResponseDto import MetricsResponseDto
+from src.metrics.model.Metrics import Metrics
+from src.metrics.dtos.MetricsTrackResponseDto import MetricsTrackResponseDto
+from fastapi import HTTPException, status
+
+class MetricsService:
+  def __init__(
+    self, 
+    repo: MetricsRepository,
+    experimentRepo: ExperimentRepository
+  ):
+    self.repo = repo
+    self.experimentRepo = experimentRepo
+
+  def createMetric(
+      self, 
+      experimentId: int, 
+      reqDto: MetricsCreateRequestDto
+    ) -> MetricsResponseDto:
+    # 1. Validate Experiment Exists
+    self.experimentRepo.getById(experimentId)
+
+    # 2. Create Metric
+    newMetric = Metrics(
+      title=reqDto.title,
+      custom=reqDto.custom,
+      selector=reqDto.selector,
+      description=reqDto.description,
+      experimentId=experimentId,
+      triggered=0 # Default count
+    )
+    
+    savedMetric = self.repo.add(newMetric)
+
+    return self._mapToResponse(savedMetric)
+
+  def getMetrics(self, experimentId: int) -> list[MetricsResponseDto]:
+    self.experimentRepo.getById(experimentId)
+    metrics = self.repo.getByExperimentId(experimentId)
+    return [self._mapToResponse(m) for m in metrics]
+
+  def deleteMetric(self, id: int) -> MetricsResponseDto:
+    metric = self.repo.getById(id)
+    self.repo.delete(metric)
+    return self._mapToResponse(metric)
+  
+  def trackMetric(self, id: int):
+    self.repo.incrementTrigger(id)
+    return MetricsTrackResponseDto(message="Metric tracked successfully")
+
+  def _mapToResponse(self, m: Metrics) -> MetricsResponseDto:
+    return MetricsResponseDto(
+      id=m.id,
+      experimentId=m.experimentId, # type: ignore
+      title=m.title, # type: ignore
+      custom=m.custom,
+      selector=m.selector,
+      description=m.description,
+      triggered=m.triggered if m.triggered else 0
+    )
 
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\org\OrgRouter.py
 from fastapi import APIRouter
@@ -3540,6 +4375,31 @@ class UserService:
       userResponseDtoList.append(urDto)
 
     return PaginationResponseDto[UserResponseDto](items=userResponseDtoList, total=total)
+
+file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\utils\CacheService.py
+import json
+import redis
+from typing import Optional, Any
+from config import Config
+
+class CacheService:
+  def __init__(self):
+    self.client = redis.from_url(Config.getValByKey("REDIS_URL"))
+    self.defaultTtl = 60 # 60 seconds
+
+  def get(self, key: str) -> Optional[Any]:
+    data = self.client.get(key)
+    if data:
+      return json.loads(data)
+    return None
+
+  def set(self, key: str, value: Any, ttl: int = None):
+    expiry = ttl if ttl is not None else self.defaultTtl
+    jsonData = json.dumps(value, default=str) 
+    self.client.setex(key, expiry, jsonData)
+
+  def delete(self, key: str):
+    self.client.delete(key)
 
 file path: C:\Users\Shahriar\Documents\Projects\Personal\PyAdmin\src\utils\Constants.py
 OTP_POPULATION_DIGITS = "0123456789"
