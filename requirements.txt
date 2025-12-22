@@ -8,4 +8,5 @@ pyjwt==2.10.1
 fastapi[standard]
 gunicorn
 httptools==0.7.1
-mmh3=5.2.0
+mmh3==5.2.0
+redis==5.0.1

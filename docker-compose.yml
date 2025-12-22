@@ -5,15 +5,13 @@ services:
     build: .
     ports:
       - "8000:8000"
-    # Change #1: Removed code volume mount for production. Uncomment for development only.
-    # volumes:
-    #   - .:/app
-    # Add this line to load environment variables from the .env.dev file
     env_file:
       - .env.dev
     depends_on:
-      - db
-    # Change #2: Removed --reload for production. Add back for development hot reload.
+      db:
+        condition: service_healthy # Wait for DB to be actually ready
+      redis:
+        condition: service_started # Wait for Redis container
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
   db:
@@ -21,11 +19,22 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=pyadmin
+      - POSTGRES_USER=abuser
+      - POSTGRES_PASSWORD=123456
+      - POSTGRES_DB=abdb
     ports:
-      - "5432:5432"
+      - "5433:5432"
+    # CRITICAL: Healthcheck prevents app from connecting before DB is ready
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
 
 volumes:
   postgres_data:

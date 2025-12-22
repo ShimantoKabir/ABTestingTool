@@ -30,6 +30,12 @@ from src.metrics.services.MetricsService import MetricsService
 from src.metrics.repository.MetricsRepositoryImp import MetricsRepositoryImp
 from src.bucket.repository.BucketRepositoryImp import BucketRepositoryImp
 from src.decision.services.DecisionService import DecisionService
+from src.utils.CacheService import CacheService
+
+def getCacheService() -> CacheService:
+  return CacheService()
+
+CacheServiceDep = Annotated[CacheService, Depends(getCacheService)]
 
 def getUserService(db: DBSessionDep, bgTask: BackgroundTasks) -> UserService:
   crypto = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -96,20 +102,20 @@ def getVariationService(db: DBSessionDep) -> VariationService:
   experimentRepo = ExperimentRepositoryImp(db)
   return VariationService(repo, experimentRepo)
 
-def getConditionService(db: DBSessionDep) -> ConditionService:
+def getConditionService(db: DBSessionDep, cache: CacheServiceDep) -> ConditionService:
   repo = ConditionRepositoryImp(db)
   experimentRepo = ExperimentRepositoryImp(db)
-  return ConditionService(repo, experimentRepo)
+  return ConditionService(repo, experimentRepo, cache)
 
 def getMetricsService(db: DBSessionDep) -> MetricsService:
   repo = MetricsRepositoryImp(db)
   experimentRepo = ExperimentRepositoryImp(db)
   return MetricsService(repo, experimentRepo)
 
-def getDecisionService(db: DBSessionDep) -> DecisionService:
+def getDecisionService(db: DBSessionDep, cache: CacheServiceDep) -> DecisionService:
   bucketRepo = BucketRepositoryImp(db)
   experimentRepo = ExperimentRepositoryImp(db)
-  return DecisionService(bucketRepo, experimentRepo)
+  return DecisionService(bucketRepo, experimentRepo, cache)
 
 UserServiceDep = Annotated[UserService, Depends(getUserService)]
 MenuServiceDep = Annotated[MenuService, Depends(getMenuService)]

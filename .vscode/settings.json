@@ -7,6 +7,8 @@
     "dtos",
     "esmtp",
     "fastapi",
+    "gunicorn",
+    "httptools",
     "levelname",
     "mailmug",
     "menutemplate",
@@ -23,6 +25,7 @@
     "qualname",
     "repr",
     "selectinload",
+    "setex",
     "sqlalchemy",
     "sqlmodel",
     "sqltypes",
@@ -35,13 +38,15 @@
   ],
   "sqltools.connections": [
     {
+      "ssh": "Disabled",
       "previewLimit": 50,
       "server": "localhost",
+      "port": 5433,
       "driver": "PostgreSQL",
-      "name": "PG-DB-LOCAL",
-      "database": "pyadmin",
-      "username": "postgres",
-      "connectString": "postgresql://postgres:5432@localhost:5432/pyadmin"
+      "name": "docker-db",
+      "username": "abuser",
+      "password": "123456",
+      "database": "abdb"
     }
   ],
   "editor.fontSize": 15,

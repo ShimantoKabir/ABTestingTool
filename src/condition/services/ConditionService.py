@@ -3,52 +3,69 @@ from src.experiment.repository.ExperimentRepository import ExperimentRepository
 from src.condition.dtos.ConditionCreateRequestDto import ConditionCreateRequestDto
 from src.condition.dtos.ConditionResponseDto import ConditionResponseDto
 from src.condition.model.Condition import Condition
+from src.utils.CacheService import CacheService
 from fastapi import HTTPException, status
 
 class ConditionService:
   def __init__(
     self, 
     repo: ConditionRepository,
-    experimentRepo: ExperimentRepository
+    experimentRepo: ExperimentRepository,
+    cacheService: CacheService
   ):
     self.repo = repo
     self.experimentRepo = experimentRepo
+    self.cache = cacheService
 
   def createCondition(
       self, 
       experimentId: int, 
       reqDto: ConditionCreateRequestDto
     ) -> ConditionResponseDto:
-    # 1. Validate Experiment Exists (Raises 404 if not found)
-    self.experimentRepo.getById(experimentId)
+    # Check if experiment exists
+    experiment = self.experimentRepo.getById(experimentId)
+    if not experiment:
+      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found")
 
-    # 2. Create Condition
     newCondition = Condition(
-      urls=reqDto.urls,
+      experimentId=experimentId,
       operator=reqDto.operator,
-      experimentId=experimentId
+      urls=reqDto.urls
     )
     
     savedCondition = self.repo.add(newCondition)
+    
+    # 3. INVALIDATE CACHE
+    # The targeting rules have changed. We must clear the cache for this project.
+    self.invalidateProjectCache(experiment.projectId)
+    
+    return self.mapToResponse(savedCondition)
 
-    return self._mapToResponse(savedCondition)
-
-  def getConditions(self, experimentId: int) -> list[ConditionResponseDto]:
-    self.experimentRepo.getById(experimentId)
-    conditions = self.repo.getByExperimentId(experimentId)
-    return [self._mapToResponse(c) for c in conditions]
-
-  def deleteCondition(self, id: int)-> ConditionResponseDto:
+  def deleteCondition(self, id: int) -> ConditionResponseDto:
     condition = self.repo.getById(id)
+    if not condition:
+      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Condition not found!")
+        
+    # We need the experiment to find the projectId
+    experiment = self.experimentRepo.getById(condition.experimentId)
+    
     self.repo.delete(condition)
-    return self._mapToResponse(condition)
+    
+    # 3. INVALIDATE CACHE
+    if experiment:
+      self.invalidateProjectCache(experiment.projectId)
+        
+    return self.mapToResponse(condition)
 
-  def _mapToResponse(self, c: Condition) -> ConditionResponseDto:
-    # Ensure urls is a list of strings
-    url_list = [str(u) for u in c.urls] if c.urls else []
+  # Helper to keep code clean
+  def invalidateProjectCache(self, projectId: int):
+    cacheKey = f"project:{projectId}:active_experiments"
+    self.cache.delete(cacheKey)
+
+  def mapToResponse(self, c: Condition) -> ConditionResponseDto:
     return ConditionResponseDto(
       id=c.id,
-      experimentId=c.experimentId, # type: ignore
-      urls=url_list,
+      experimentId=c.experimentId,
+      urls=c.urls,
       operator=c.operator
     )

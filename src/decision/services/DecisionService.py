@@ -1,6 +1,5 @@
 import mmh3
 import random
-from datetime import datetime, timedelta, timezone
 from fastapi import BackgroundTasks
 from src.bucket.repository.BucketRepository import BucketRepository
 from src.experiment.repository.ExperimentRepository import ExperimentRepository
@@ -8,25 +7,29 @@ from src.decision.dtos.DecisionRequestDto import DecisionRequestDto
 from src.decision.dtos.DecisionResponseDto import DecisionResponseDto, ExperimentDecisionDto, VariationDecisionDto
 from src.bucket.model.Bucket import Bucket
 from src.experiment.model.Experiment import Experiment
+from src.experiment.model.ExperimentStatus import ExperimentStatus
 from src.condition.model.Operator import Operator
 from src.metrics.dtos.MetricsResponseDto import MetricsResponseDto
 from src.condition.dtos.ConditionResponseDto import ConditionResponseDto
+from src.utils.CacheService import CacheService
+from src.variation.model.Variation import Variation
+from src.condition.model.Condition import Condition
+from src.metrics.model.Metrics import Metrics
+from config import Config
 
 class DecisionService:
   # The bucketing scale (1 to 10,000 for 0.01% granularity)
-  MAX_TRAFFIC_VAL = 10000
-  
-  # Caching configuration
-  _cache = {} 
-  _cacheTtl = timedelta(seconds=60) # Cache experiment config for 60 seconds
+  MAX_TRAFFIC_VAL = Config.getValByKey("MAX_TRAFFIC_VAL")
 
   def __init__(
     self, 
     bucketRepo: BucketRepository,
-    experimentRepo: ExperimentRepository
+    experimentRepo: ExperimentRepository,
+    cacheService: CacheService
   ):
     self.bucketRepo = bucketRepo
     self.experimentRepo = experimentRepo
+    self.cache = cacheService
 
   def makeDecision(
       self, 
@@ -36,21 +39,19 @@ class DecisionService:
     ) -> DecisionResponseDto:
     
     # 1. Identity Management
-    # If client didn't send an ID (first visit), generate a random one.
     endUserId = reqDto.endUserId if reqDto.endUserId else random.randint(100000, 999999)
 
-    # 2. Fetch Active Experiments (with Caching)
+    # 2. Fetch Active Experiments (Redis Cache -> DB)
     activeExperiments = self.getActiveExperiments(projectId)
 
     decisions: list[ExperimentDecisionDto] = []
 
     for exp in activeExperiments:
-      # 3. Targeting Check (Does URL match?)
+      # 3. Targeting Check
       if not self.checkTargeting(exp, reqDto.url):
         continue
 
       # 4. Consistency Check (Sticky Bucketing)
-      # Check if this user is already assigned to a variation in this experiment
       existingBucket = self.bucketRepo.get(experimentId=exp.id, endUserId=endUserId)
 
       if existingBucket:
@@ -60,8 +61,7 @@ class DecisionService:
           decisions.append(self.buildDecisionDto(exp, assignedVariation))
       
       else:
-        # 5. The Bucketing Machine (New Assignment)
-        # Hash input: "UserID:ExperimentID" -> Ensures randomness per experiment
+        # 5. The Bucketing Machine
         hashKey = f"{endUserId}:{exp.id}"
         hashInt = mmh3.hash(hashKey)
         
@@ -73,7 +73,6 @@ class DecisionService:
         cumulativeTraffic = 0
 
         for variation in exp.variations:
-          # Convert percentage (traffic is 0-100) to scale (0-10000)
           rangeLimit = int(variation.traffic * 100)
           
           if bucketVal <= (cumulativeTraffic + rangeLimit):
@@ -84,18 +83,15 @@ class DecisionService:
 
         if chosenVariation:
           # 7. Async Persistence
-          # Queue the DB write to run AFTER response is sent.
           bgTasks.add_task(self.recordAssignment, exp.id, endUserId, chosenVariation.id)
           decisions.append(self.buildDecisionDto(exp, chosenVariation))
 
     return DecisionResponseDto(endUserId=endUserId, decisions=decisions)
 
   def recordAssignment(self, expId: int, userId: int, varId: int):
-    # This runs in the background.
-    # We check again or rely on DB constraints to prevent duplicates.
+    # Runs in background. Checks for duplicates before inserting.
     existing = self.bucketRepo.get(expId, userId)
     if not existing:
-      # Note: Ensure your BucketRepository.add handles IntegrityError/Duplicates gracefully
       self.bucketRepo.add(Bucket(expId=expId, endUserId=userId, variationId=varId))
 
   def checkTargeting(self, exp: Experiment, url: str) -> bool:
@@ -106,7 +102,6 @@ class DecisionService:
     for cond in exp.conditions:
       isMatch = False 
       
-      # OR Logic for Positive Operators (Match if ANY url matches)
       if cond.operator in [Operator.IS, Operator.CONTAIN]:
         for condUrl in cond.urls:
           if cond.operator == Operator.CONTAIN and condUrl in url:
@@ -116,9 +111,8 @@ class DecisionService:
             isMatch = True
             break
              
-      # AND Logic for Negative Operators (Fail if ANY url matches)
       elif cond.operator in [Operator.IS_NOT, Operator.NOT_CONTAIN]:
-        isMatch = True # Default to True, try to prove False
+        isMatch = True 
         for condUrl in cond.urls:
           if cond.operator == Operator.NOT_CONTAIN and condUrl in url:
             isMatch = False
@@ -135,22 +129,48 @@ class DecisionService:
       return any(matches)
 
   def getActiveExperiments(self, projectId: int) -> list[Experiment]:
-    # Check In-Memory Cache
-    if projectId in self._cache:
-      data, timestamp = self._cache[projectId]
-      if datetime.now(timezone.utc) - timestamp < self._cacheTtl:
-        return data
+    cacheKey = f"project:{projectId}:active_experiments"
     
-    # Cache Miss: Fetch from DB
-    activeExperiments = self.experimentRepo.getAllActive(rows=1000, page=1, projectId=projectId)
+    # 1. Try Redis Cache
+    cachedData = self.cache.get(cacheKey)
+    if cachedData:
+      return [self.deserializeExperiment(item) for item in cachedData]
     
-    # Set Cache
-    self._cache[projectId] = (activeExperiments, datetime.now(timezone.utc))
+    # 2. Cache Miss: Fetch from DB
+    allExperiments = self.experimentRepo.getAll(rows=1000, page=1, projectId=projectId)
+    activeExperiments = [e for e in allExperiments if e.status == ExperimentStatus.ACTIVE]
+    
+    # 3. Serialize and Save to Redis
+    serializedData = [self.serializeExperiment(e) for e in activeExperiments]
+    self.cache.set(cacheKey, serializedData, ttl=60)
     
     return activeExperiments
 
+  # Helper: Convert DB Object to Dictionary for Redis
+  def serializeExperiment(self, exp: Experiment) -> dict:
+    return {
+      "id": exp.id,
+      "title": exp.title,
+      "status": exp.status,
+      "js": exp.js,
+      "css": exp.css,
+      "conditionType": exp.conditionType,
+      "conditions": [c.model_dump() for c in exp.conditions],
+      "metrics": [m.model_dump() for m in exp.metrics],
+      "variations": [v.model_dump() for v in exp.variations]
+    }
+
+  # Helper: Convert Dictionary back to DB Object
+  def deserializeExperiment(self, data: dict) -> Experiment:
+    # Manually reconstruct objects to keep relationships valid
+    exp = Experiment(**data)
+    # Reconstruct relationships from nested lists
+    exp.conditions = [Condition(**c) for c in data.get("conditions", [])]
+    exp.metrics = [Metrics(**m) for m in data.get("metrics", [])]
+    exp.variations = [Variation(**v) for v in data.get("variations", [])]
+    return exp
+
   def buildDecisionDto(self, exp: Experiment, variation) -> ExperimentDecisionDto:
-    # Map Conditions
     condDtos = [
       ConditionResponseDto(
         id=c.id, 
@@ -160,7 +180,6 @@ class DecisionService:
       ) for c in exp.conditions
     ]
     
-    # Map Metrics
     metDtos = [
       MetricsResponseDto(
         id=m.id, 
