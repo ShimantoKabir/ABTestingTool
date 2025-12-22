@@ -18,7 +18,7 @@ personalization, Redis caching, and PostgreSQL.
 - Metrics Tracking
 - Decision Engine with Bucketing
 - Redis-based Caching
-- Fully Dockerized Setup
+- Fully Dockerize Setup
 - Alembic Database Migrations
 - Email-based OTP & Notifications (Mailmug for development)
 
@@ -72,7 +72,7 @@ Create a file named `.env.dev` in the project root.
     PORT=2525
     UNAME=your_username
     PASSWORD=your_password
-    SENDER=pyadmin@mail.com
+    SENDER=admin@mail.com
 
     OTP_EXPIRY_DURATION=180
 
@@ -216,9 +216,21 @@ Remove containers and volumes (WARNING: deletes DB data):
 
     docker-compose down -v
 
+Start fresh
+
+    docker-compose up -d --build
+
 Create a new migration:
 
     alembic revision --autogenerate -m "your message"
+
+View Backend Logs
+
+    docker-compose logs -f web
+
+View Database Logs
+
+    docker-compose logs -f db
 
 ---
 
