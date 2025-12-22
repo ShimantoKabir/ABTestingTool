@@ -53,31 +53,6 @@ personalization, Redis caching, and PostgreSQL.
 
 ---
 
-## ⚙️ Environment Variables
-
-Create a file named `.env.dev` in the project root.
-
-    DB_URL=postgresql://abuser:123456@db:5432/abdb
-    SECRET_KEY=your_secret_key
-    ALGORITHM=HS256
-
-    ACCESS_TOKEN_EXPIRE_MINUTES=60
-    REFRESH_TOKEN_EXPIRE_MINUTES=70
-    PASSWORD_MAX_CHAR=8
-
-    REDIS_URL=redis://redis:6379/0
-    MAX_TRAFFIC_VAL=10000
-
-    HOST=mail
-    PORT=1025
-    UNAME=null
-    PASSWORD=null
-    SENDER=admin@mail.com
-
-    OTP_EXPIRY_DURATION=180
-
----
-
 ## 🐳 Run With Docker (Recommended)
 
 ### Build & Start Services
@@ -214,8 +189,10 @@ Industry-standard tool for local object storage (like Google Cloud Storage or AW
 - Open the UI: Go to http://localhost:9001
 - Login:
 
-  - User: admin
-  - Pass: admin
+  - User:
+    admin
+  - Pass:
+    admin
 
 - Create a Bucket: You must create the bucket (e.g., ab-bucket) in the UI before your code tries to upload to it.
 
