@@ -16,6 +16,7 @@ from src.menutemplate.model.MenuTemplate import MenuTemplate
 from src.email.EmailService import EmailService
 from src.utils.Constants import OTP_POPULATION_DIGITS
 from src.db.repository.UserOrgLinkRepository import UserOrgLinkRepository
+from src.org.dtos.OrgSearchResDto import OrgSearchResDto
 
 class OrgService:
   def __init__(
@@ -110,3 +111,12 @@ class OrgService:
   def generateOtp(self)->str:
     otp = ''.join(random.choices(OTP_POPULATION_DIGITS, k=6))
     return otp
+  
+  def searchOrg(self, query: str) -> list[OrgSearchResDto]:
+    # We limit to 10 results to keep the autocomplete fast
+    orgs = self.repo.search(query, limit=10)
+    
+    return [
+      OrgSearchResDto(id=o.id, name=o.name) 
+      for o in orgs
+    ]

@@ -3,9 +3,10 @@ from pydantic import EmailStr, constr, field_validator
 from config import Config
 
 @dataclass
-class UserCreateRequestDto:
+class UserRegistrationRequestDto:
   email: EmailStr
   password: constr(min_length=1) # type: ignore
+  orgId: int 
   
   @field_validator("password")
   def validatePassword(cls, password):

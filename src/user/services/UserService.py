@@ -6,8 +6,8 @@ from passlib.context import CryptContext
 from fastapi import status, HTTPException
 from src.org.dtos.OrgAddReqDto import OrgAddReqDto
 from src.org.dtos.OrgAddResDto import OrgAddResDto
-from src.user.dtos.UserCreateRequestDto import UserCreateRequestDto
-from src.user.dtos.UserCreateResponseDto import UserCreateResponseDto
+from src.user.dtos.UserRegistrationRequestDto import UserRegistrationRequestDto
+from src.user.dtos.UserRegistrationResponseDto import UserRegistrationResponseDto
 from src.user.repository.UserRepository import UserRepository
 from src.user.dtos.UserResponseDto import UserResponseDto
 from src.user.dtos.UserVerificationRequestDto import UserVerificationRequestDto
@@ -42,22 +42,29 @@ class UserService:
     self.orgRepo = orgRepository
     self.userOrgLinkRepo = userOrgLinkRepo
 
-  def createUser(self, reqDto : UserCreateRequestDto) -> UserCreateResponseDto:
-    otp = self.generateOtp()
+  def registerUser(self, reqDto : UserRegistrationRequestDto) -> UserRegistrationResponseDto:
+    org = self.orgRepo.getById(reqDto.orgId)
     
+    otp = self.generateOtp()
     truncatedPassword = reqDto.password[:72]
     
+    # Note: UserOrgLink will be created automatically with default values (disabled=True)
     newUser = self.repo.add(User(
       email=reqDto.email,
       password=self.crypto.hash(truncatedPassword),
       otp=otp,
-      orgs=[],         
+      orgs=[org],         
       menuTemplates=[] 
     ))
 
     self.emailService.sendAccountVerificationOtp(newUser.email, otp)
 
-    resUser = UserCreateResponseDto(id=newUser.id,email=newUser.email,message=USER_CREATION_RES_MSG)
+    resUser = UserRegistrationResponseDto(
+      id=newUser.id,
+      email=newUser.email,
+      message=USER_CREATION_RES_MSG
+    )
+
     return resUser
   
   def getUserById(self, id: int)-> UserResponseDto:

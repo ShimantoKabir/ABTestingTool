@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from di import UserServiceDep
-from src.user.dtos.UserCreateRequestDto import UserCreateRequestDto
-from src.user.dtos.UserCreateResponseDto import UserCreateResponseDto
+from src.user.dtos.UserRegistrationRequestDto import UserRegistrationRequestDto
+from src.user.dtos.UserRegistrationResponseDto import UserRegistrationResponseDto
 from src.user.dtos.UserVerificationRequestDto import UserVerificationRequestDto
 from src.user.dtos.UserVerificationResponseDto import UserVerificationResponseDto
 from src.user.dtos.ForgotPasswordOtpRequestDto import ForgotPasswordOtpRequestDto
@@ -11,14 +11,14 @@ routes = APIRouter()
 
 @routes.post(
   "/users/registration", 
-  response_model=UserCreateResponseDto, 
+  response_model=UserRegistrationResponseDto, 
   tags=["user"]
 )
 async def registration(
-    reqDto: UserCreateRequestDto,
+    reqDto: UserRegistrationRequestDto,
     userServiceDep: UserServiceDep
-  )->UserCreateResponseDto:
-  return userServiceDep.createUser(reqDto)
+  )->UserRegistrationResponseDto:
+  return userServiceDep.registerUser(reqDto)
 
 @routes.post("/users/verify", tags=["user"])
 async def verify(

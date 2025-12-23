@@ -11,6 +11,7 @@
     "gunicorn",
     "Healthcheck",
     "httptools",
+    "ilike",
     "isready",
     "levelname",
     "mailmug",

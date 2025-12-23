@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pydantic import EmailStr
 
 @dataclass
-class UserCreateResponseDto:
+class UserRegistrationResponseDto:
   id: int
   email: EmailStr
   message: str
