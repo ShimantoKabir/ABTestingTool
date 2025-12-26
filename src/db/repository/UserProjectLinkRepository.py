@@ -9,3 +9,7 @@ class UserProjectLinkRepository(ABC):
   @abstractmethod
   def get(self, userId: int, projectId: int) -> UserProjectLink | None:
     pass
+
+  @abstractmethod
+  def delete(self, link: UserProjectLink):
+    pass

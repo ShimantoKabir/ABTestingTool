@@ -12,7 +12,7 @@ routes = APIRouter()
 @routes.post(
   "/menu-templates/", 
   response_model= MenuTemplateCreateResponseDto, 
-  tags=["menu"],
+  tags=["menu-template"],
   name="act:create-menu-template"
 )
 async def createRole(
@@ -21,13 +21,13 @@ async def createRole(
   )->MenuTemplateCreateResponseDto:  
   return mtService.createMenuTemplate(reqDto)
 
-@routes.get("/menu-templates/{id:int}", tags=["menu"], name="act:get-menu-template")
+@routes.get("/menu-templates/{id:int}", tags=["menu-template"], name="act:get-menu-template")
 async def getById(id: int, mtService: MenuTemplateServiceDep)-> MenuTemplateResponseDto:
   return mtService.getById(id)
 
 @routes.post(
   "/menu-templates/all",
-  tags=["menu"],
+  tags=["menu-template"],
   name="act:get-menu-templates",
   response_model=PaginationResponseDto[MenuTemplateResponseDto]
 )
@@ -39,7 +39,7 @@ async def getMenuTemplates(
 
 @routes.get(
   "/menu-templates/tree",
-  tags=["menu"],
+  tags=["menu-template"],
   name="act:get-user-menu-tree",
   response_model=List[Any]
 )

@@ -25,6 +25,7 @@ class MenuTemplateService:
       orgId=reqDto.orgId,
       tree=reqDto.tree
     )
+    
     return resMt
 
   def getById(self, id: int) -> MenuTemplateResponseDto:

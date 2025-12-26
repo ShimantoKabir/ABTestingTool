@@ -19,3 +19,7 @@ class UserProjectLinkRepositoryImp(UserProjectLinkRepository):
       .where(UserProjectLink.userId == userId)
       .where(UserProjectLink.projectId == projectId)
     ).first()
+  
+  def delete(self, link: UserProjectLink):
+    self.db.delete(link)
+    self.db.commit()

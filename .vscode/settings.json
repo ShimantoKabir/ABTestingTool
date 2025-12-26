@@ -12,6 +12,7 @@
     "Healthcheck",
     "httptools",
     "ilike",
+    "isouter",
     "isready",
     "levelname",
     "mailmug",

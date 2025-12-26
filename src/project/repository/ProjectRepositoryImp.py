@@ -1,9 +1,11 @@
+from src.db.links.UserProjectLink import UserProjectLink
 from src.project.repository.ProjectRepository import ProjectRepository
 from src.project.model.Project import Project
 from db import DBSessionDep
 from fastapi import status, HTTPException
 from sqlmodel import select
 from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 
 class ProjectRepositoryImp(ProjectRepository):
   def __init__(self, db: DBSessionDep):
@@ -44,3 +46,11 @@ class ProjectRepositoryImp(ProjectRepository):
       select(func.count(Project.id))
       .where(Project.orgId == orgId)
     ).one()
+  
+  def getAllByUserId(self, userId: int) -> list[tuple[Project, UserProjectLink]]:
+    return self.db.exec(
+      select(Project, UserProjectLink)
+      .join(UserProjectLink, Project.id == UserProjectLink.projectId)
+      .where(UserProjectLink.userId == userId)
+      .options(selectinload(Project.org))
+    ).all()

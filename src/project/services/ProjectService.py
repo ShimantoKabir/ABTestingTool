@@ -8,6 +8,11 @@ from src.db.links.UserProjectLink import UserProjectLink
 from src.utils.pagination.PaginationRequestDto import PaginationRequestDto
 from src.utils.pagination.PaginationResponseDto import PaginationResponseDto
 from src.db.links.PermissionType import PermissionType
+from fastapi import status, HTTPException
+from src.project.dtos.ProjectAssignUserRequestDto import ProjectAssignUserRequestDto
+from src.project.dtos.ProjectAssignUserResponseDto import ProjectAssignUserResponseDto
+from src.db.links.UserProjectLink import UserProjectLink
+from src.project.dtos.ProjectRemoveUserResponseDto import ProjectRemoveUserResponseDto
 
 class ProjectService:
   def __init__(
@@ -64,3 +69,65 @@ class ProjectService:
       ))
 
     return PaginationResponseDto[ProjectResponseDto](items=items, total=total)
+  
+  def assignUser(self, projectId: int, reqDto: ProjectAssignUserRequestDto) -> ProjectAssignUserResponseDto:
+    # 1. Check if Project exists
+    project = self.repo.getProjectById(projectId) # raises 404 if not found
+
+    # 2. Check if User is already assigned to this project
+    existingLink = self.linkRepo.get(userId=reqDto.userId, projectId=projectId)
+    if existingLink:
+      raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT, 
+        detail="User is already assigned to this project!"
+      )
+
+    # 3. Create the assignment
+    newLink = UserProjectLink(
+      userId=reqDto.userId,
+      projectId=projectId,
+      permissionType=PermissionType.EDITOR,
+      disabled=False,
+      super=False # Default to false for regular assignments
+    )
+    
+    self.linkRepo.add(newLink)
+
+    return ProjectAssignUserResponseDto(
+      projectId=projectId,
+      userId=reqDto.userId,
+      message="User assigned to project successfully"
+    )
+  
+  def getProjectsByUserId(self, userId: int) -> list[ProjectResponseDto]:
+    results = self.repo.getAllByUserId(userId)
+    
+    responseList = []
+    for project, link in results:
+      responseList.append(ProjectResponseDto(
+        id=project.id,
+        name=project.name,
+        description=project.description,
+        orgId=project.orgId,
+        orgName=project.org.name if project.org else ""
+      ))
+      
+    return responseList
+  
+  def removeUserFromProject(self, projectId: int, userId: int) -> ProjectRemoveUserResponseDto:
+    # 1. Find the assignment
+    link = self.linkRepo.get(userId=userId, projectId=projectId)
+    
+    # 2. If no link exists, we can't delete it
+    if not link:
+      raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND, 
+        detail="User is not assigned to this project!"
+      )
+
+    # 3. Hard Delete (Remove row from DB)
+    self.linkRepo.delete(link)
+
+    return ProjectRemoveUserResponseDto(
+      message="User removed from project successfully"
+    )

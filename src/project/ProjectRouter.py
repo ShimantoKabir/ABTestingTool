@@ -5,6 +5,9 @@ from src.project.dtos.ProjectCreateResponseDto import ProjectCreateResponseDto
 from src.project.dtos.ProjectResponseDto import ProjectResponseDto
 from src.utils.pagination.PaginationRequestDto import PaginationRequestDto
 from src.utils.pagination.PaginationResponseDto import PaginationResponseDto
+from src.project.dtos.ProjectAssignUserRequestDto import ProjectAssignUserRequestDto
+from src.project.dtos.ProjectAssignUserResponseDto import ProjectAssignUserResponseDto
+from src.project.dtos.ProjectRemoveUserResponseDto import ProjectRemoveUserResponseDto
 
 routes = APIRouter()
 
@@ -44,3 +47,51 @@ async def getProjects(
   projectService: ProjectServiceDep
 ) -> PaginationResponseDto[ProjectResponseDto]:  
   return projectService.getProjects(reqDto)
+
+@routes.post(
+  "/projects/{projectId}/users",
+  tags=["project"],
+  name="act:assign-user-to-project",
+  response_model=ProjectAssignUserResponseDto
+)
+async def assignUserToProject(
+  projectId: int,
+  reqDto: ProjectAssignUserRequestDto,
+  projectService: ProjectServiceDep
+) -> ProjectAssignUserResponseDto:
+  """
+  Assign an existing user to a project with a specific permission level.
+  """
+  return projectService.assignUser(projectId, reqDto)
+
+@routes.get(
+  "/projects/user/{userId}",
+  tags=["project"],
+  name="act:get-user-projects",
+  response_model=list[ProjectResponseDto]
+)
+async def getProjectsByUser(
+  userId: int,
+  projectService: ProjectServiceDep
+) -> list[ProjectResponseDto]:
+  """
+  Get all projects assigned to a specific user.
+  """
+  return projectService.getProjectsByUserId(userId)
+
+
+@routes.delete(
+  "/projects/{projectId}/users/{userId}",
+  tags=["project"],
+  name="act:remove-user-from-project",
+  response_model=ProjectRemoveUserResponseDto
+)
+async def removeUserFromProject(
+  projectId: int,
+  userId: int,
+  projectService: ProjectServiceDep
+) -> ProjectRemoveUserResponseDto:
+  """
+  Remove (unassign) a user from a specific project.
+  """
+  return projectService.removeUserFromProject(projectId, userId)

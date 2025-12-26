@@ -5,6 +5,5 @@ from pydantic import constr
 class MenuTemplateCreateResponseDto:
   id: int
   name: str
-  roleId: int
   orgId: int
   tree: str

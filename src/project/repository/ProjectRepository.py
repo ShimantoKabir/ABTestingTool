@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from src.db.links.UserProjectLink import UserProjectLink
 from src.project.model.Project import Project
 
 class ProjectRepository(ABC):
@@ -16,4 +17,8 @@ class ProjectRepository(ABC):
 
   @abstractmethod
   def countAllProjects(self, orgId: int) -> int:
+    pass
+
+  @abstractmethod
+  def getAllByUserId(self, userId: int) -> list[tuple[Project, UserProjectLink]]:
     pass

@@ -217,7 +217,8 @@ class UserService:
     if reqDto.total is None or reqDto.total == 0:
       total = self.repo.countAllUser(orgId=reqDto.orgId)
 
-    for u,l in users:
+    for u,l,r,mt in users:
+      
       urDto: UserResponseDto = UserResponseDto(
         id=u.id,
         email=u.email,
@@ -226,7 +227,11 @@ class UserService:
         lastName=u.lastName,
         verified=u.verified,
         super=l.super,
-        disabled=l.disabled
+        disabled=l.disabled,
+        roleId=r.id if r else None,
+        menuTemplateId=mt.id if mt else None, 
+        roleName=r.name if r else None,
+        menuTemplateName=mt.name if mt else None
       )
 
       userResponseDtoList.append(urDto)

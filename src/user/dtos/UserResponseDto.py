@@ -12,3 +12,7 @@ class UserResponseDto:
   contactNumber: str
   disabled: Optional[bool] = None
   super: Optional[str] = None
+  roleId: Optional[int] = None
+  menuTemplateId: Optional[int] = None
+  roleName: Optional[str] = None
+  menuTemplateName: Optional[str] = None
