@@ -24,6 +24,8 @@ from src.db.links.UserOrgLink import UserOrgLink
 from src.utils.pagination.PaginationRequestDto import PaginationRequestDto
 from src.utils.pagination.PaginationResponseDto import PaginationResponseDto
 from src.utils.Constants import OTP_POPULATION_DIGITS, USER_CREATION_RES_MSG
+from src.user.dtos.UserJoinOrgRequestDto import UserJoinOrgRequestDto
+from src.user.dtos.UserJoinOrgResponseDto import UserJoinOrgResponseDto
 
 class UserService:
   otpExpiryDuration: int = int(Config.getValByKey("OTP_EXPIRY_DURATION"))
@@ -264,4 +266,45 @@ class UserService:
       menuTemplateId=link.menuTemplateId,
       roleName=roleName,
       menuTemplateName=mtName
+    )
+  
+  def joinOrg(self, reqDto: UserJoinOrgRequestDto) -> UserJoinOrgResponseDto:
+    # 1. Validate User
+    user = self.repo.getUserByEmail(reqDto.email)
+    if not user:
+      raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND, 
+        detail="User with this email does not exist!"
+      )
+    
+    if not user.verified:
+      raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST, 
+        detail="User is not verified. Please verify your account first!"
+      )
+
+    # 2. Validate Organization
+    org = self.orgRepo.getById(reqDto.orgId) # Raises 404 if not found
+
+    # 3. Check for Existing Membership
+    existingLink = self.userOrgLinkRepo.get(userId=user.id, orgId=org.id)
+    if existingLink:
+      raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT, 
+        detail="User is already a member (or has a pending request) for this organization!"
+      )
+
+    # 4. Create Link (Defaults: Role=None, Menu=None, Disabled=True)
+    newLink = UserOrgLink(
+      userId=user.id,
+      orgId=org.id
+      # disabled defaults to True in the model, acting as a "Pending Request"
+    )
+    
+    self.userOrgLinkRepo.add(newLink) # Ensure your repo has .add(), otherwise use .edit()
+
+    return UserJoinOrgResponseDto(
+      message="Join request sent successfully. An admin must approve your request!",
+      userId=user.id,
+      orgId=org.id
     )

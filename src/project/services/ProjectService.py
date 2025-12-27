@@ -103,12 +103,12 @@ class ProjectService:
       userId=reqDto.userId,
       message="User assigned to project successfully"
     )
-  
-  def getProjectsByUserId(self, userId: int) -> list[ProjectResponseDto]:
-    results = self.repo.getAllByUserId(userId)
-    
+
+  def getProjectsByUserIdAndOrgId(self, userId: int, orgId: int) -> list[ProjectResponseDto]:
+    results = self.linkRepo.getActiveProjectsByOrgIds(userId, [orgId])
+
     responseList = []
-    for project, link in results:
+    for project in results:
       responseList.append(ProjectResponseDto(
         id=project.id,
         name=project.name,

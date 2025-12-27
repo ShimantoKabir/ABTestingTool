@@ -24,6 +24,20 @@ class UserOrgLinkRepositoryImp(UserOrgLinkRepository):
       .where(UserOrgLink.orgId == orgId)
       .where(UserOrgLink.super == True)
     ).all()
+  
+  def add(self, link: UserOrgLink) -> UserOrgLink:
+    self.db.add(link)
+    self.db.commit()
+    self.db.refresh(link)
+    return link
+  
+  def getActiveOrgs(self, userId: int, orgId: int) -> list[UserOrgLink]:
+    return self.db.exec(
+      select(UserOrgLink)
+      .where(UserOrgLink.orgId == orgId)
+      .where(UserOrgLink.disabled == False)
+      .where(UserOrgLink.userId == userId)
+    ).all()
 
 
 

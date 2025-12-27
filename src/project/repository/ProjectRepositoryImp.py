@@ -14,7 +14,7 @@ class ProjectRepositoryImp(ProjectRepository):
   def getProjectById(self, id: int) -> Project:
     project = self.db.get(Project, id)
     if not project:
-      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found!")
     return project
 
   def add(self, project: Project) -> Project:

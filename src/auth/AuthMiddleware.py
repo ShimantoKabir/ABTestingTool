@@ -19,6 +19,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
       "/users/registration",
       "/users/verify",
       "/users/forgot-password-otp",
+      "/users/join-organization",
       "/static/menu.json",
       "/organizations",
       "/organizations/search"

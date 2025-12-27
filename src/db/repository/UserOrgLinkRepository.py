@@ -14,3 +14,11 @@ class UserOrgLinkRepository(ABC):
   def getSuperAdminsByOrgId(self, orgId: int) -> list[UserOrgLink]:
     pass
 
+  @abstractmethod
+  def add(self, link: UserOrgLink) -> UserOrgLink:
+    pass
+
+  @abstractmethod
+  def getActiveOrgs(self, userId: int, orgId: int) -> UserOrgLink:
+    pass
+

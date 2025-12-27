@@ -1,4 +1,4 @@
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\.dockerignore
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\.dockerignore
 # Git
 .git
 .gitignore
@@ -31,7 +31,7 @@ __pycache__/
 .pytest_cache/
 .coverage
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\.env.dev
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\.env.dev
 DB_URL="postgresql://postgres:postgres@db:5432/abdb"
 # DB_URL = 'sqlite:///db.sqlite'
 SECRET_KEY="09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
@@ -68,12 +68,12 @@ STORAGE_USE_SSL=False
 
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\.gitignore
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\.gitignore
 .venv
 db.sqlite
 __pycache__*
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\alembic.ini
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\alembic.ini
 # A generic, single database configuration.
 
 [alembic]
@@ -195,7 +195,7 @@ format = %(levelname)-5.5s [%(name)s] %(message)s
 datefmt = %H:%M:%S
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\config.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\config.py
 import os
 from dotenv import load_dotenv
 
@@ -211,7 +211,7 @@ class Config:
 
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\core.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\core.py
 from fastapi import FastAPI
 
 app = FastAPI()
@@ -227,7 +227,7 @@ def getAllRoutes() -> list[str]:
 async def test()->str:
   return "App is running.....!"
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\db.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\db.py
 from typing import Annotated
 from fastapi import Depends
 from sqlmodel import Session, create_engine
@@ -241,7 +241,7 @@ def get_session():
 
 DBSessionDep = Annotated[Session, Depends(get_session)]
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\di.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\di.py
 from fastapi import Depends, BackgroundTasks
 from typing import Annotated
 from src.user.services.UserService import UserService
@@ -275,6 +275,8 @@ from src.metrics.repository.MetricsRepositoryImp import MetricsRepositoryImp
 from src.bucket.repository.BucketRepositoryImp import BucketRepositoryImp
 from src.decision.services.DecisionService import DecisionService
 from src.utils.CacheService import CacheService
+from src.project.repository.ProjectRepositoryImp import ProjectRepositoryImp
+from src.db.repository.UserProjectLinkRepositoryImp import UserProjectLinkRepositoryImp
 
 def getCacheService() -> CacheService:
   return CacheService()
@@ -304,12 +306,15 @@ def getMenuTemplateService(db: DBSessionDep) -> MenuTemplateService:
 def getAuthService(db: DBSessionDep) -> AuthService:
   crypto = CryptContext(schemes=["bcrypt"], deprecated="auto")
   repo = AuthRepositoryImp(db)
-  return AuthService(repo, crypto)
+  userOrgLinkRepo = UserOrgLinkRepositoryImp(db)
+  userProjectLinkRepo = UserProjectLinkRepositoryImp(db)
+  return AuthService(repo, crypto, userOrgLinkRepo, userProjectLinkRepo)
 
 def getProjectService(db: DBSessionDep) -> ProjectService:
   projectRepo = ProjectRepositoryImp(db)
-  linkRepo = UserProjectLinkRepositoryImp(db)
-  return ProjectService(projectRepo, linkRepo)
+  userProjectLinkRepo = UserProjectLinkRepositoryImp(db)
+  userOrgLinkRepo = UserOrgLinkRepositoryImp(db)
+  return ProjectService(projectRepo, userProjectLinkRepo, userOrgLinkRepo)
 
 def getFileService() -> FileService:
   return FileService()
@@ -320,6 +325,9 @@ def getOrgService(db: DBSessionDep, bgTask: BackgroundTasks) -> OrgService:
   roleRepo = RoleRepositoryImp(db)
   userOrgLinkRepo = UserOrgLinkRepositoryImp(db)
   mtRepo = MenuTemplateRepositoryImp(db)
+
+  projectRepo = ProjectRepositoryImp(db)
+  userProjectLinkRepo = UserProjectLinkRepositoryImp(db)
   
   crypto = CryptContext(schemes=["bcrypt"], deprecated="auto")
   fileService = getFileService()
@@ -333,7 +341,9 @@ def getOrgService(db: DBSessionDep, bgTask: BackgroundTasks) -> OrgService:
     fileService, 
     emailService, 
     userOrgLinkRepo, 
-    mtRepo
+    mtRepo,
+    projectRepo,
+    userProjectLinkRepo
   )
 
 def getExperimentService(db: DBSessionDep) -> ExperimentService:
@@ -375,7 +385,7 @@ MetricsServiceDep = Annotated[MetricsService, Depends(getMetricsService)]
 DecisionServiceDep = Annotated[DecisionService, Depends(getDecisionService)]
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\docker-compose.yml
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\docker-compose.yml
 version: "3.8"
 
 services:
@@ -384,6 +394,8 @@ services:
     ports:
       - "8000:8000"
       - "5678:5678"
+    volumes:
+      - .:/app
     env_file:
       - .env.dev
     depends_on:
@@ -457,7 +469,32 @@ volumes:
   minio_data:
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\Dockerfile
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\docker-db.session.sql
+SELECT * FROM project;
+-- SELECT * FROM userorglin
+-- SELECT * FROM organization;
+-- SELECT * FROM role;
+-- SELECT * FROM menutemplate;
+-- SELECT * FROM alembic_version;
+-- DELETE FROM userinfo;
+-- DELETE FROM organization;
+-- DELETE FROM userorglink;
+
+-- UPDATE userinfo SET disabled = false WHERE id='1';
+
+-- DELETE FROM alembic_version WHERE version_num = 'b97a65ac9ca7';
+
+-- DROP TABLE alembic_version;
+-- DROP TABLE menu;
+-- DROP TABLE userinfo;
+-- DROP TABLE organization;
+-- DROP TABLE action;
+-- DROP TABLE userorglink;
+
+
+
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\Dockerfile
 # Use a newer stable Python version (3.12) as the parent image
 FROM python:3.12-slim
 
@@ -491,7 +528,7 @@ EXPOSE 8000
 # Command to run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\main.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\main.py
 from fastapi import Depends, Header
 from src.user import UserRouter
 from src.user import UserInsecureRouter
@@ -564,32 +601,7 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\PG-DB-LOCAL.session.sql
-SELECT * FROM userinfo;
--- SELECT * FROM userorglin
--- SELECT * FROM organization;
--- SELECT * FROM role;
--- SELECT * FROM menutemplate;
--- SELECT * FROM alembic_version;
--- DELETE FROM userinfo;
--- DELETE FROM organization;
--- DELETE FROM userorglink;
-
--- UPDATE userinfo SET disabled = false WHERE id='1';
-
--- DELETE FROM alembic_version WHERE version_num = 'b97a65ac9ca7';
-
--- DROP TABLE alembic_version;
--- DROP TABLE menu;
--- DROP TABLE userinfo;
--- DROP TABLE organization;
--- DROP TABLE action;
--- DROP TABLE userorglink;
-
-
-
-
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\README.md
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\README.md
 # ABTestingTool
 
 ABTestingTool is a **user, role, menu, and API access management system** built with **FastAPI**.
@@ -657,6 +669,10 @@ Services started:
 - PostgreSQL: localhost:5433
 - Redis: localhost:6379
 
+### Generate migration:
+
+    docker-compose exec web alembic revision --autogenerate -m "init"
+
 ### Run Database Migrations
 
     docker-compose exec web alembic upgrade head
@@ -708,7 +724,7 @@ Initialize migrations (first time only):
 
 Generate migration:
 
-    alembic revision --autogenerate -m "initial commit"
+    alembic revision --autogenerate -m "init"
 
 Apply migrations:
 
@@ -821,7 +837,7 @@ View Database Logs
 This project is intended for **personal or internal use**.
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\requirements.txt
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\requirements.txt
 psycopg2==2.9.10
 alembic==1.15.2
 sqlmodel==0.0.24
@@ -836,7 +852,7 @@ mmh3==5.2.0
 redis==5.0.1
 debugpy==1.8.0
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\migrations\env.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\migrations\env.py
 from logging.config import fileConfig
 from pathlib import Path
 from sqlalchemy import engine_from_config
@@ -938,10 +954,10 @@ else:
     run_migrations_online()
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\migrations\README
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\migrations\README
 Generic single-database configuration.
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\migrations\script.py.mako
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\migrations\script.py.mako
 """${message}
 
 Revision ID: ${up_revision}
@@ -971,12 +987,12 @@ def downgrade() -> None:
     ${downgrades if downgrades else "pass"}
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\migrations\versions\2e23d57b8c4c_init.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\migrations\versions\1dd1a8c73d6c_init.py
 """init
 
-Revision ID: 2e23d57b8c4c
+Revision ID: 1dd1a8c73d6c
 Revises: 
-Create Date: 2025-12-05 17:49:21.784590
+Create Date: 2025-12-24 12:50:24.341832
 
 """
 from typing import Sequence, Union
@@ -987,7 +1003,7 @@ import sqlmodel
 
 
 # revision identifiers, used by Alembic.
-revision: str = '2e23d57b8c4c'
+revision: str = '1dd1a8c73d6c'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -1043,12 +1059,10 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('orgId', sa.Integer(), nullable=True),
-    sa.Column('userId', sa.Integer(), nullable=True),
     sa.Column('tree', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('createdAt', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.Column('updatedAt', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['orgId'], ['organization.id'], ),
-    sa.ForeignKeyConstraint(['userId'], ['userinfo.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('project',
@@ -1172,7 +1186,7 @@ def downgrade() -> None:
     # ### end Alembic commands ###
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\action\ActionRouter.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\action\ActionRouter.py
 from fastapi import APIRouter
 from core import app, getAllRoutes
 
@@ -1183,7 +1197,7 @@ async def get()-> list[str]:
   return getAllRoutes()
   
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\auth\AuthMiddleware.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\auth\AuthMiddleware.py
 import jwt
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import Request, Response, status
@@ -1206,7 +1220,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
       "/users/verify",
       "/users/forgot-password-otp",
       "/static/menu.json",
-      "/organizations"
+      "/organizations",
+      "/organizations/search"
     ]
 
     if request.url.path in excludedPaths:
@@ -1246,7 +1261,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\auth\AuthRouter.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\auth\AuthRouter.py
 from fastapi import APIRouter
 from src.auth.dtos.LoginResponseDto import LoginResponseDto
 from src.auth.dtos.LoginRequestDto import LoginRequestDto
@@ -1267,7 +1282,7 @@ async def refresh(authRefreshRequestDto: AuthRefreshRequestDto, authService: Aut
   
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\auth\dtos\AuthRefreshRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\auth\dtos\AuthRefreshRequestDto.py
 from dataclasses import dataclass
 from pydantic import constr
 
@@ -1275,7 +1290,7 @@ from pydantic import constr
 class AuthRefreshRequestDto:
   refreshToken: constr(min_length=1) # type: ignore
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\auth\dtos\AuthRefreshResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\auth\dtos\AuthRefreshResponseDto.py
 from dataclasses import dataclass
 
 @dataclass
@@ -1283,7 +1298,7 @@ class AuthRefreshResponseDto:
   accessToken: str
   refreshToken: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\auth\dtos\LoginRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\auth\dtos\LoginRequestDto.py
 from dataclasses import dataclass
 from pydantic import constr, field_validator, EmailStr
 from config import Config
@@ -1307,7 +1322,7 @@ class LoginRequestDto:
       raise ValueError("Password must contain at least one special character!")
     return password
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\auth\dtos\LoginResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\auth\dtos\LoginResponseDto.py
 from dataclasses import dataclass
 
 @dataclass
@@ -1315,7 +1330,7 @@ class LoginResponseDto:
   accessToken: str
   refreshToken: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\auth\dtos\tokens.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\auth\dtos\tokens.py
 from dataclasses import dataclass
 from pydantic import constr
 
@@ -1324,7 +1339,7 @@ class Token:
   accessToken: constr(min_length=1) # type: ignore
   refreshToken: constr(min_length=1) # type: ignore
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\auth\repository\AuthRepository.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\auth\repository\AuthRepository.py
 from abc import ABC, abstractmethod
 from src.user.model.User import User
 
@@ -1334,7 +1349,7 @@ class AuthRepository(ABC):
   def getUserByEmail(self, email: str) -> User:
     pass
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\auth\repository\AuthRepositoryImp.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\auth\repository\AuthRepositoryImp.py
 from src.auth.repository.AuthRepository import AuthRepository
 from di import DBSessionDep
 from src.user.model.User import User
@@ -1348,9 +1363,10 @@ class AuthRepositoryImp(AuthRepository):
   def getUserByEmail(self, email: str) -> User:
     return self.db.exec(select(User).filter_by(email=email)).first()
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\auth\services\AuthService.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\auth\services\AuthService.py
 import jwt
 from passlib.context import CryptContext
+from src.db.repository.UserOrgLinkRepository import UserOrgLinkRepository
 from src.auth.repository.AuthRepository import AuthRepository
 from src.auth.dtos.LoginRequestDto import LoginRequestDto
 from src.auth.dtos.LoginResponseDto import LoginResponseDto
@@ -1362,11 +1378,20 @@ from src.auth.dtos.AuthRefreshResponseDto import AuthRefreshResponseDto
 from src.auth.dtos.AuthRefreshRequestDto import AuthRefreshRequestDto
 from jwt import ExpiredSignatureError
 from src.auth.dtos.tokens import Token
+from src.db.repository.UserProjectLinkRepository import UserProjectLinkRepository
 
 class AuthService:
-  def __init__(self, authRepository : AuthRepository, crypto: CryptContext):
+  def __init__(
+      self, 
+      authRepository : AuthRepository, 
+      crypto: CryptContext, 
+      userOrgLinkRepo: UserOrgLinkRepository,
+      userProjectLinkRepo: UserProjectLinkRepository
+    ):
     self.repo = authRepository
     self.crypto = crypto
+    self.userOrgLinkRepo = userOrgLinkRepo
+    self.userProjectLinkRepo = userProjectLinkRepo
 
   def login(self, reqDto: LoginRequestDto) -> str:
     dbUser: User = self.repo.getUserByEmail(reqDto.email)
@@ -1382,7 +1407,38 @@ class AuthService:
     if not isPasswordVerified:
       raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect password!")
     
-    token = self.generateToken(dbUser)
+    activeOrgs = []
+    for org in dbUser.orgs:
+      link = self.userOrgLinkRepo.get(dbUser.id, org.id)
+      
+      if link and not link.disabled:
+        activeOrgs.append({
+        "id": org.id,
+        "name": org.name
+      })
+    
+    if not activeOrgs:
+      raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN, 
+        detail="Your account is disabled in all organizations!"
+      )
+
+    activeProjects = []
+    for project in dbUser.projects:
+      link = self.userProjectLinkRepo.get(dbUser.id, project.id)
+      
+      if link and not link.disabled:
+        activeProjects.append({
+        "id": project.id,
+        "name": project.name
+      })
+    if not activeProjects:
+      raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN, 
+        detail="You do not have any project assigned!"
+      )
+
+    token = self.generateToken(dbUser, activeOrgs, activeProjects)
 
     res = LoginResponseDto(accessToken=token.accessToken, refreshToken=token.refreshToken)
     return res
@@ -1410,27 +1466,23 @@ class AuthService:
     res  = AuthRefreshResponseDto(accessToken=token.accessToken,refreshToken=token.refreshToken)
     return res
   
-  def generateToken(self, user: User)->Token:
+  def generateToken(self, user: User, orgs, projects)->Token:
     accessTokenExpires = datetime.now(timezone.utc) + timedelta(minutes=int(Config.getValByKey("ACCESS_TOKEN_EXPIRE_MINUTES")))
     refreshTokenExpires = datetime.now(timezone.utc) + timedelta(minutes=int(Config.getValByKey("REFRESH_TOKEN_EXPIRE_MINUTES")))
 
-    orgs = []
-    for o in user.orgs:
-      orgs.append({
-        "id": o.id,
-        "name": o.name,
-        "disabled": o.disabled
-      })
-
     accessToken = jwt.encode({
       "sub" : user.email,
+      "userId": user.id,
       "orgs" : orgs,
+      "projects": projects,
       "exp" : accessTokenExpires
     }, Config.getValByKey("SECRET_KEY"), Config.getValByKey("ALGORITHM"))
 
     refreshToken = jwt.encode({
       "sub" : user.email,
+      "userId": user.id,
       "orgs" : orgs,
+      "projects": projects,
       "exp" : refreshTokenExpires
     }, Config.getValByKey("SECRET_KEY"), Config.getValByKey("ALGORITHM"))
     
@@ -1439,7 +1491,7 @@ class AuthService:
   
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\bucket\model\Bucket.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\bucket\model\Bucket.py
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, DateTime, func
 from datetime import datetime
@@ -1461,7 +1513,7 @@ class Bucket(SQLModel, table=True):
     )
   )
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\bucket\repository\BucketRepository.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\bucket\repository\BucketRepository.py
 from abc import ABC, abstractmethod
 from src.bucket.model.Bucket import Bucket
 
@@ -1475,7 +1527,7 @@ class BucketRepository(ABC):
   def add(self, bucket: Bucket) -> Bucket:
     pass
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\bucket\repository\BucketRepositoryImp.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\bucket\repository\BucketRepositoryImp.py
 from src.bucket.repository.BucketRepository import BucketRepository
 from src.bucket.model.Bucket import Bucket
 from db import DBSessionDep
@@ -1507,7 +1559,7 @@ class BucketRepositoryImp(BucketRepository):
       existing = self.get(bucket.expId, bucket.endUserId)
       return existing
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\condition\ConditionRouter.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\condition\ConditionRouter.py
 from fastapi import APIRouter
 from di import ConditionServiceDep
 from src.condition.dtos.ConditionCreateRequestDto import ConditionCreateRequestDto
@@ -1552,7 +1604,7 @@ async def deleteCondition(
   ) -> ConditionResponseDto:
   return service.deleteCondition(id)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\condition\dtos\ConditionCreateRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\condition\dtos\ConditionCreateRequestDto.py
 from typing import List
 from pydantic import BaseModel, field_validator, HttpUrl, TypeAdapter, ValidationError
 from src.condition.model.Operator import Operator
@@ -1573,7 +1625,7 @@ class ConditionCreateRequestDto(BaseModel):
         raise ValueError(f"Invalid URL format: {url}!")
     return v
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\condition\dtos\ConditionResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\condition\dtos\ConditionResponseDto.py
 from dataclasses import dataclass
 from typing import List
 from src.condition.model.Operator import Operator
@@ -1585,7 +1637,7 @@ class ConditionResponseDto:
   urls: List[str]
   operator: Operator
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\condition\model\Condition.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\condition\model\Condition.py
 from sqlmodel import Field, SQLModel, ARRAY, String, Relationship
 from typing import Optional, List
 from pydantic import HttpUrl
@@ -1611,7 +1663,7 @@ class Condition(SQLModel, table=True):
     )
   )
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\condition\model\Operator.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\condition\model\Operator.py
 from enum import StrEnum
 
 class Operator(StrEnum):
@@ -1620,7 +1672,7 @@ class Operator(StrEnum):
   IS = "IS"
   IS_NOT = "IS_NOT"
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\condition\repository\ConditionRepository.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\condition\repository\ConditionRepository.py
 from abc import ABC, abstractmethod
 from src.condition.model.Condition import Condition
 
@@ -1642,7 +1694,7 @@ class ConditionRepository(ABC):
   def delete(self, condition: Condition):
     pass
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\condition\repository\ConditionRepositoryImp.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\condition\repository\ConditionRepositoryImp.py
 from src.condition.repository.ConditionRepository import ConditionRepository
 from src.condition.model.Condition import Condition
 from db import DBSessionDep
@@ -1674,7 +1726,7 @@ class ConditionRepositoryImp(ConditionRepository):
     self.db.delete(condition)
     self.db.commit()
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\condition\services\ConditionService.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\condition\services\ConditionService.py
 from src.condition.repository.ConditionRepository import ConditionRepository
 from src.experiment.repository.ExperimentRepository import ExperimentRepository
 from src.condition.dtos.ConditionCreateRequestDto import ConditionCreateRequestDto
@@ -1747,7 +1799,7 @@ class ConditionService:
       operator=c.operator
     )
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\db\links\PermissionType.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\db\links\PermissionType.py
 from enum import StrEnum
 
 class PermissionType(StrEnum):
@@ -1755,7 +1807,7 @@ class PermissionType(StrEnum):
   EDITOR = "Editor"
   VIEWER = "Viewer"
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\db\links\UserOrgLink.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\db\links\UserOrgLink.py
 from sqlmodel import Field, SQLModel, Relationship
 from typing import Optional
 
@@ -1774,7 +1826,7 @@ class UserOrgLink(SQLModel, table=True):
   disabled: bool = Field(default=True , nullable=False)
   super: bool = Field(default=False , nullable=False)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\db\links\UserProjectLink.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\db\links\UserProjectLink.py
 from sqlmodel import Field, SQLModel
 from src.db.links.PermissionType import PermissionType
 
@@ -1786,7 +1838,7 @@ class UserProjectLink(SQLModel, table=True):
   super: bool = Field(default=False, nullable=False)
   permissionType: PermissionType = Field(default=PermissionType.VIEWER)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\db\repository\UserOrgLinkRepository.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\db\repository\UserOrgLinkRepository.py
 from abc import ABC, abstractmethod
 from src.db.links.UserOrgLink import UserOrgLink
 
@@ -1799,9 +1851,13 @@ class UserOrgLinkRepository(ABC):
   def get(self, userId: int, orgId: int) -> UserOrgLink:
     pass
 
+  @abstractmethod
+  def getSuperAdminsByOrgId(self, orgId: int) -> list[UserOrgLink]:
+    pass
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\db\repository\UserOrgLinkRepositoryImp.py
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\db\repository\UserOrgLinkRepositoryImp.py
 from src.db.repository.UserOrgLinkRepository import UserOrgLinkRepository
 from src.db.links.UserOrgLink import UserOrgLink
 from db import DBSessionDep
@@ -1821,12 +1877,19 @@ class UserOrgLinkRepositoryImp(UserOrgLinkRepository):
     self.db.refresh(userOrgLink)
 
     return userOrgLink
+  
+  def getSuperAdminsByOrgId(self, orgId: int) -> list[UserOrgLink]:
+    return self.db.exec(
+      select(UserOrgLink)
+      .where(UserOrgLink.orgId == orgId)
+      .where(UserOrgLink.super == True)
+    ).all()
 
 
 
   
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\db\repository\UserProjectLinkRepository.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\db\repository\UserProjectLinkRepository.py
 from abc import ABC, abstractmethod
 from src.db.links.UserProjectLink import UserProjectLink
 
@@ -1839,7 +1902,11 @@ class UserProjectLinkRepository(ABC):
   def get(self, userId: int, projectId: int) -> UserProjectLink | None:
     pass
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\db\repository\UserProjectLinkRepositoryImp.py
+  @abstractmethod
+  def delete(self, link: UserProjectLink):
+    pass
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\db\repository\UserProjectLinkRepositoryImp.py
 from src.db.repository.UserProjectLinkRepository import UserProjectLinkRepository
 from src.db.links.UserProjectLink import UserProjectLink
 from db import DBSessionDep
@@ -1861,8 +1928,12 @@ class UserProjectLinkRepositoryImp(UserProjectLinkRepository):
       .where(UserProjectLink.userId == userId)
       .where(UserProjectLink.projectId == projectId)
     ).first()
+  
+  def delete(self, link: UserProjectLink):
+    self.db.delete(link)
+    self.db.commit()
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\decision\DecisionRouter.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\decision\DecisionRouter.py
 from fastapi import APIRouter, Request, status, HTTPException, BackgroundTasks
 from di import DecisionServiceDep, ProjectServiceDep
 from src.decision.dtos.DecisionRequestDto import DecisionRequestDto
@@ -1895,7 +1966,7 @@ async def makeDecision(
   # Pass bgTasks to service
   return decisionService.makeDecision(reqDto, projectId, bgTasks)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\decision\dtos\DecisionRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\decision\dtos\DecisionRequestDto.py
 from dataclasses import dataclass
 from typing import Optional
 
@@ -1904,7 +1975,7 @@ class DecisionRequestDto:
   url: str
   endUserId: Optional[int] = None
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\decision\dtos\DecisionResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\decision\dtos\DecisionResponseDto.py
 from dataclasses import dataclass
 from typing import List, Optional
 from src.condition.dtos.ConditionResponseDto import ConditionResponseDto
@@ -1932,7 +2003,7 @@ class DecisionResponseDto:
   endUserId: int
   decisions: List[ExperimentDecisionDto]
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\decision\services\DecisionService.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\decision\services\DecisionService.py
 import mmh3
 import random
 from fastapi import BackgroundTasks
@@ -2142,7 +2213,7 @@ class DecisionService:
       metrics=metDtos
     )
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\email\EmailService.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\email\EmailService.py
 import smtplib
 from abc import ABC, abstractmethod
 
@@ -2156,7 +2227,7 @@ class EmailService(ABC):
   def sendForgotPasswordOtp(email: str, otp: str) -> bool:
     pass
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\email\EmailServiceImp.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\email\EmailServiceImp.py
 import smtplib
 from src.email.EmailService import EmailService
 from fastapi import BackgroundTasks
@@ -2232,7 +2303,7 @@ class EmailServiceImp(EmailService):
     self.bgTask.add_task(self.sendMail, email, html, "Password reset otp!")
     return True
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\experiment\ExperimentRouter.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\experiment\ExperimentRouter.py
 from fastapi import APIRouter
 from di import ExperimentServiceDep
 from src.experiment.dtos.ExperimentCreateRequestDto import ExperimentCreateRequestDto
@@ -2279,7 +2350,7 @@ async def getExperimentById(
 ) -> ExperimentResponseDto:
   return service.getById(id)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\experiment\dtos\ExperimentCreateRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\experiment\dtos\ExperimentCreateRequestDto.py
 from dataclasses import dataclass
 from typing import List, Optional
 from pydantic import constr
@@ -2297,7 +2368,7 @@ class ExperimentCreateRequestDto:
   
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\experiment\dtos\ExperimentCreateResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\experiment\dtos\ExperimentCreateResponseDto.py
 from dataclasses import dataclass
 from src.experiment.model.ExperimentStatus import ExperimentStatus
 
@@ -2307,7 +2378,7 @@ class ExperimentCreateResponseDto:
   title: str
   status: ExperimentStatus
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\experiment\dtos\ExperimentResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\experiment\dtos\ExperimentResponseDto.py
 from dataclasses import dataclass
 from typing import Optional
 from datetime import datetime
@@ -2332,7 +2403,7 @@ class ExperimentResponseDto:
   createdAt: Optional[datetime]
   updatedAt: Optional[datetime]
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\experiment\dtos\ExperimentUpdateRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\experiment\dtos\ExperimentUpdateRequestDto.py
 from typing import Optional
 from pydantic import model_validator, BaseModel, field_validator, HttpUrl, TypeAdapter, ValidationError
 from src.experiment.model.ExperimentType import ExperimentType
@@ -2370,14 +2441,14 @@ class ExperimentUpdateRequestDto(BaseModel):
       raise ValueError("At least one field must be provided for update!")
     return self
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\experiment\model\ConditionType.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\experiment\model\ConditionType.py
 from enum import StrEnum
 
 class ConditionType(StrEnum):
   ALL = "ALL"
   ANY = "ANY"
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\experiment\model\Experiment.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\experiment\model\Experiment.py
 from sqlmodel import Field, SQLModel, Relationship
 from sqlalchemy import Text, Column, DateTime, func
 from typing import Optional
@@ -2420,7 +2491,7 @@ class Experiment(SQLModel, table=True):
 
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\experiment\model\ExperimentStatus.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\experiment\model\ExperimentStatus.py
 from enum import StrEnum
 
 class ExperimentStatus(StrEnum):
@@ -2430,7 +2501,7 @@ class ExperimentStatus(StrEnum):
   ARCHIVED = "Archived"
   ENDED = "Ended"
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\experiment\model\ExperimentType.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\experiment\model\ExperimentType.py
 from enum import StrEnum
 
 class ExperimentType(StrEnum):
@@ -2439,7 +2510,7 @@ class ExperimentType(StrEnum):
   SPLIT_URL = "Split URL"
   REDIRECT = "Redirect"
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\experiment\model\TriggerType.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\experiment\model\TriggerType.py
 from enum import StrEnum
 
 class TriggerType(StrEnum):
@@ -2447,7 +2518,7 @@ class TriggerType(StrEnum):
   DOM_READY = "DOM Ready"
   URL_CHANGES = "URL Changes"
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\experiment\repository\ExperimentRepository.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\experiment\repository\ExperimentRepository.py
 from abc import ABC, abstractmethod
 from src.experiment.model.Experiment import Experiment
 
@@ -2477,7 +2548,7 @@ class ExperimentRepository(ABC):
   def getAllActive(self, rows: int, page: int, projectId: int) -> list[Experiment]:
     pass
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\experiment\repository\ExperimentRepositoryImp.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\experiment\repository\ExperimentRepositoryImp.py
 from src.experiment.model.ExperimentStatus import ExperimentStatus
 from src.experiment.repository.ExperimentRepository import ExperimentRepository
 from src.experiment.model.Experiment import Experiment
@@ -2537,7 +2608,7 @@ class ExperimentRepositoryImp(ExperimentRepository):
       .offset(offset).limit(rows)
     ).all()
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\experiment\services\ExperimentService.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\experiment\services\ExperimentService.py
 from src.experiment.repository.ExperimentRepository import ExperimentRepository
 from src.project.repository.ProjectRepository import ProjectRepository
 from src.experiment.dtos.ExperimentCreateRequestDto import ExperimentCreateRequestDto
@@ -2658,7 +2729,7 @@ class ExperimentService:
       updatedAt=e.updatedAt
     )
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menu\MenuRouter.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menu\MenuRouter.py
 from fastapi import APIRouter
 from src.menu.dtos.MenuCreateRequestDto import MenuCreateRequestDto
 from src.menu.dtos.MenuCreateResponseDto import MenuCreateResponseDto
@@ -2690,7 +2761,7 @@ async def getMenus(
 ) -> list[MenuResponseDto]:  
   return menuService.getMenus()
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menu\dtos\MenuCreateRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menu\dtos\MenuCreateRequestDto.py
 from dataclasses import dataclass
 from pydantic import constr
 
@@ -2701,7 +2772,7 @@ class MenuCreateRequestDto:
   href: constr(min_length=1) # type: ignore
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menu\dtos\MenuCreateResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menu\dtos\MenuCreateResponseDto.py
 from dataclasses import dataclass
 
 @dataclass
@@ -2711,7 +2782,7 @@ class MenuCreateResponseDto:
   icon: str
   href: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menu\dtos\MenuResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menu\dtos\MenuResponseDto.py
 from dataclasses import dataclass
 
 @dataclass
@@ -2721,7 +2792,7 @@ class MenuResponseDto:
   icon: str
   href: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menu\model\Menu.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menu\model\Menu.py
 from sqlmodel import Field, SQLModel
 
 class Menu(SQLModel, table=True):
@@ -2734,7 +2805,7 @@ class Menu(SQLModel, table=True):
     
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menu\repository\MenuRepository.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menu\repository\MenuRepository.py
 from abc import ABC, abstractmethod
 from src.menu.model.Menu import Menu
 
@@ -2751,7 +2822,7 @@ class MenuRepository(ABC):
   def getAllMenu(self) -> list[Menu]:
     pass
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menu\repository\MenuRepositoryImp.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menu\repository\MenuRepositoryImp.py
 from src.menu.repository.MenuRepository import MenuRepository
 from src.menu.model.Menu import Menu
 from db import DBSessionDep
@@ -2788,7 +2859,7 @@ class MenuRepositoryImp(MenuRepository):
 
   
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menu\services\MenuService.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menu\services\MenuService.py
 from src.menu.repository.MenuRepository import MenuRepository
 from src.menu.dtos.MenuCreateRequestDto import MenuCreateRequestDto
 from src.menu.dtos.MenuCreateResponseDto import MenuCreateResponseDto
@@ -2827,7 +2898,8 @@ class MenuService:
 
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menutemplate\MenuTemplateRouter.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menutemplate\MenuTemplateRouter.py
+from typing import Any, List
 from fastapi import APIRouter
 from src.menutemplate.dtos.MenuTemplateCreateRequestDto import MenuTemplateCreateRequestDto
 from src.menutemplate.dtos.MenuTemplateCreateResponseDto import MenuTemplateCreateResponseDto
@@ -2841,7 +2913,7 @@ routes = APIRouter()
 @routes.post(
   "/menu-templates/", 
   response_model= MenuTemplateCreateResponseDto, 
-  tags=["menu"],
+  tags=["menu-template"],
   name="act:create-menu-template"
 )
 async def createRole(
@@ -2850,13 +2922,13 @@ async def createRole(
   )->MenuTemplateCreateResponseDto:  
   return mtService.createMenuTemplate(reqDto)
 
-@routes.get("/menu-templates/{id}", tags=["menu"], name="act:get-menu-template")
+@routes.get("/menu-templates/{id:int}", tags=["menu-template"], name="act:get-menu-template")
 async def getById(id: int, mtService: MenuTemplateServiceDep)-> MenuTemplateResponseDto:
   return mtService.getById(id)
 
 @routes.post(
   "/menu-templates/all",
-  tags=["menu"],
+  tags=["menu-template"],
   name="act:get-menu-templates",
   response_model=PaginationResponseDto[MenuTemplateResponseDto]
 )
@@ -2866,7 +2938,23 @@ async def getMenuTemplates(
 ) -> PaginationResponseDto[MenuTemplateResponseDto]:  
   return mtService.getMenuTemplates(reqDto)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menutemplate\dtos\MenuTemplateCreateRequestDto.py
+@routes.get(
+  "/menu-templates/tree",
+  tags=["menu-template"],
+  name="act:get-user-menu-tree",
+  response_model=List[Any]
+)
+async def getMenuTree(
+  userId: int, 
+  orgId: int,
+  mtService: MenuTemplateServiceDep
+) -> List[Any]:
+  """
+  Fetch the menu tree assigned to a specific user within an organization.
+  """
+  return mtService.getMenuTreeByUserIdAndOrgId(userId, orgId)
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menutemplate\dtos\MenuTemplateCreateRequestDto.py
 from dataclasses import dataclass
 from pydantic import constr
 
@@ -2877,7 +2965,7 @@ class MenuTemplateCreateRequestDto:
   orgId: int 
   tree: constr(min_length=1) # type: ignore
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menutemplate\dtos\MenuTemplateCreateResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menutemplate\dtos\MenuTemplateCreateResponseDto.py
 from dataclasses import dataclass
 from pydantic import constr
 
@@ -2885,15 +2973,11 @@ from pydantic import constr
 class MenuTemplateCreateResponseDto:
   id: int
   name: str
-  roleId: int
   orgId: int
   tree: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menutemplate\dtos\MenuTemplateResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menutemplate\dtos\MenuTemplateResponseDto.py
 from dataclasses import dataclass
-from pydantic import constr
-from src.role.dtos.RoleResponseDto import RoleResponseDto
-from src.org.dtos.OrgResDto import OrgResDto
 
 @dataclass
 class MenuTemplateResponseDto:
@@ -2903,7 +2987,7 @@ class MenuTemplateResponseDto:
   tree: str
   orgName: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menutemplate\model\MenuTemplate.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menutemplate\model\MenuTemplate.py
 from sqlmodel import Field, SQLModel, Relationship
 from typing import Optional
 from datetime import datetime
@@ -2914,8 +2998,6 @@ class MenuTemplate(SQLModel, table=True):
   name: str = Field(default=None, nullable=False)
   orgId: Optional[int] = Field(default=None, foreign_key="organization.id")
   org: Optional["Organization"] = Relationship(back_populates="menuTemplates") # type: ignore 
-  userId: Optional[int] = Field(default=None, foreign_key="userinfo.id")
-  user: Optional["User"] = Relationship(back_populates="menuTemplates") # type: ignore 
   tree: str = Field(default=None, nullable=False)
   
   # 1. Added relationship back to UserOrgLink
@@ -2932,7 +3014,7 @@ class MenuTemplate(SQLModel, table=True):
     )
   )
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menutemplate\repository\MenuTemplateRepository.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menutemplate\repository\MenuTemplateRepository.py
 from abc import ABC, abstractmethod
 from src.menutemplate.model.MenuTemplate import MenuTemplate
 
@@ -2953,7 +3035,12 @@ class MenuTemplateRepository(ABC):
   def countAllMenuTemplate(self, orgId: int) -> int:
     pass
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menutemplate\repository\MenuTemplateRepositoryImp.py
+  @abstractmethod
+  def getByUserIdAndOrgId(self, userId: int, orgId: int) -> MenuTemplate:
+    pass
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menutemplate\repository\MenuTemplateRepositoryImp.py
+from src.db.links.UserOrgLink import UserOrgLink
 from src.menutemplate.repository.MenuTemplateRepository import MenuTemplateRepository
 from src.menutemplate.model.MenuTemplate import MenuTemplate
 from db import DBSessionDep
@@ -2993,12 +3080,36 @@ class MenuTemplateRepositoryImp(MenuTemplateRepository):
       select(func.count(MenuTemplate.id))
       .where(MenuTemplate.orgId == orgId)
     ).one()
+  
+  def getByUserIdAndOrgId(self, userId: int, orgId: int) -> MenuTemplate:
+    # SQL: SELECT * FROM menutemplate 
+    #      JOIN userorglink ON menutemplate.id = userorglink.menuTemplateId
+    #      WHERE userorglink.userId = :userId AND userorglink.orgId = :orgId
+    
+    statement = (
+      select(MenuTemplate)
+      .join(UserOrgLink, MenuTemplate.id == UserOrgLink.menuTemplateId)
+      .where(UserOrgLink.userId == userId)
+      .where(UserOrgLink.orgId == orgId)
+    )
+    
+    result = self.db.exec(statement).first()
+
+    if not result:
+      raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND, 
+        detail="No menu template found for this user and organization!"
+      )
+      
+    return result
 
 
 
   
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\menutemplate\services\MenuTemplateService.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\menutemplate\services\MenuTemplateService.py
+import json
+from typing import Any, List
 from src.menutemplate.repository.MenuTemplateRepository import MenuTemplateRepository
 from src.menutemplate.dtos.MenuTemplateCreateRequestDto import MenuTemplateCreateRequestDto
 from src.menutemplate.dtos.MenuTemplateCreateResponseDto import MenuTemplateCreateResponseDto
@@ -3024,6 +3135,7 @@ class MenuTemplateService:
       orgId=reqDto.orgId,
       tree=reqDto.tree
     )
+    
     return resMt
 
   def getById(self, id: int) -> MenuTemplateResponseDto:
@@ -3060,8 +3172,18 @@ class MenuTemplateService:
       mtResponseDtoList.append(mtDto)
 
     return PaginationResponseDto[MenuTemplateResponseDto](items=mtResponseDtoList, total=total)
+  
+  def getMenuTreeByUserIdAndOrgId(self, userId: int, orgId: int) -> List[Any]:
+    menuTemplate = self.repo.getByUserIdAndOrgId(userId, orgId)
+    
+    # The tree is stored as a string in DB, we parse it to return actual JSON
+    try:
+      return json.loads(menuTemplate.tree)
+    except json.JSONDecodeError:
+      # Fallback if data is corrupted or empty
+      return []
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\metrics\MetricsRouter.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\metrics\MetricsRouter.py
 from fastapi import APIRouter
 from di import MetricsServiceDep
 from src.metrics.dtos.MetricsCreateRequestDto import MetricsCreateRequestDto
@@ -3119,7 +3241,7 @@ async def trackMetric(
   ):
   return service.trackMetric(id)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\metrics\dtos\MetricsCreateRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\metrics\dtos\MetricsCreateRequestDto.py
 from typing import Optional
 from pydantic import BaseModel, model_validator
 
@@ -3136,7 +3258,7 @@ class MetricsCreateRequestDto(BaseModel):
       raise ValueError("Selector is required for non-custom metrics")
     return self
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\metrics\dtos\MetricsResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\metrics\dtos\MetricsResponseDto.py
 from dataclasses import dataclass
 from typing import Optional
 
@@ -3150,7 +3272,7 @@ class MetricsResponseDto:
   description: Optional[str]
   triggered: int
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\metrics\dtos\MetricsTrackResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\metrics\dtos\MetricsTrackResponseDto.py
 from dataclasses import dataclass
 
 @dataclass
@@ -3158,7 +3280,7 @@ class MetricsTrackResponseDto:
   message: str
   triggered: bool = True
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\metrics\model\Metrics.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\metrics\model\Metrics.py
 from sqlmodel import Field, SQLModel, Relationship
 from sqlalchemy import Column, DateTime, func
 from datetime import datetime
@@ -3184,7 +3306,7 @@ class Metrics(SQLModel, table=True):
     )
   )
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\metrics\repository\MetricsRepository.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\metrics\repository\MetricsRepository.py
 from abc import ABC, abstractmethod
 from src.metrics.model.Metrics import Metrics
 
@@ -3210,7 +3332,7 @@ class MetricsRepository(ABC):
   def incrementTrigger(self, id: int):
     pass
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\metrics\repository\MetricsRepositoryImp.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\metrics\repository\MetricsRepositoryImp.py
 from src.metrics.repository.MetricsRepository import MetricsRepository
 from src.metrics.model.Metrics import Metrics
 from db import DBSessionDep
@@ -3257,7 +3379,7 @@ class MetricsRepositoryImp(MetricsRepository):
     if result.rowcount == 0:
       raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Metric not found!")
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\metrics\services\MetricsService.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\metrics\services\MetricsService.py
 from src.metrics.repository.MetricsRepository import MetricsRepository
 from src.experiment.repository.ExperimentRepository import ExperimentRepository
 from src.metrics.dtos.MetricsCreateRequestDto import MetricsCreateRequestDto
@@ -3322,11 +3444,12 @@ class MetricsService:
       triggered=m.triggered if m.triggered else 0
     )
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\org\OrgRouter.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\org\OrgRouter.py
 from fastapi import APIRouter
 from src.org.dtos.OrgCreateRequestDto import OrgCreateRequestDto
 from src.org.dtos.OrgCreateResponseDto import OrgCreateResponseDto
 from di import OrgServiceDep
+from src.org.dtos.OrgSearchResDto import OrgSearchResDto
 
 routes = APIRouter()
 
@@ -3344,7 +3467,23 @@ async def createOrganization(
   print("Creating organization with email:", reqDto.email)
   return orgService.createOrg(reqDto)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\org\dtos\OrgAddReqDto.py
+@routes.get(
+  "/organizations/search",
+  response_model=list[OrgSearchResDto],
+  tags=["organization"],
+  name="act:search-organization"
+)
+async def searchOrganizations(
+  q: str, 
+  orgService: OrgServiceDep
+) -> list[OrgSearchResDto]:
+  """
+  Autocomplete search for organizations by name.
+  Usage: GET /organizations/search?q=Comp
+  """
+  return orgService.searchOrg(q)
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\org\dtos\OrgAddReqDto.py
 from dataclasses import dataclass
 from pydantic import constr, EmailStr
 
@@ -3360,7 +3499,7 @@ class OrgAddReqDto:
   roleId: int
   menuTemplateId: int
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\org\dtos\OrgAddResDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\org\dtos\OrgAddResDto.py
 from dataclasses import dataclass
 
 @dataclass
@@ -3369,7 +3508,7 @@ class OrgAddResDto:
   name: str 
   email: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\org\dtos\OrgCreateRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\org\dtos\OrgCreateRequestDto.py
 from dataclasses import dataclass
 from pydantic import constr, EmailStr, field_validator
 from config import Config
@@ -3395,7 +3534,7 @@ class OrgCreateRequestDto:
       raise ValueError("Password must contain at least one special character!")
     return password
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\org\dtos\OrgCreateResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\org\dtos\OrgCreateResponseDto.py
 from dataclasses import dataclass
 
 @dataclass
@@ -3404,7 +3543,7 @@ class OrgCreateResponseDto:
   name: str 
   email: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\org\dtos\OrgResDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\org\dtos\OrgResDto.py
 from dataclasses import dataclass
 
 @dataclass
@@ -3413,7 +3552,15 @@ class OrgResDto:
   name: str 
   email: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\org\model\Organization.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\org\dtos\OrgSearchResDto.py
+from dataclasses import dataclass
+
+@dataclass
+class OrgSearchResDto:
+  id: int
+  name: str
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\org\model\Organization.py
 from sqlmodel import Field, SQLModel, Relationship, Column, DateTime, func
 from typing import Optional
 from datetime import datetime
@@ -3441,7 +3588,7 @@ class Organization(SQLModel, table=True):
     )
   )
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\org\repository\OrgRepository.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\org\repository\OrgRepository.py
 from abc import ABC, abstractmethod
 from src.org.model.Organization import Organization
 
@@ -3455,12 +3602,21 @@ class OrgRepository(ABC):
   def add(self, org: Organization) -> Organization:
     pass
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\org\repository\OrgRepositoryImp.py
+  @abstractmethod
+  def search(self, query: str, limit: int = 10) -> list[Organization]:
+    pass
+
+  @abstractmethod
+  def getById(self, id: int) -> Organization:
+    pass
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\org\repository\OrgRepositoryImp.py
 from db import DBSessionDep
 from src.org.repository.OrgRepository import OrgRepository
 from src.org.model.Organization import Organization
 from fastapi import status, HTTPException
 from sqlmodel import select
+from sqlmodel import col
 
 
 class OrgRepositoryImp(OrgRepository):
@@ -3481,8 +3637,23 @@ class OrgRepositoryImp(OrgRepository):
     self.db.refresh(org)
 
     return org
+  
+  def search(self, query: str, limit: int = 10) -> list[Organization]:
+    return self.db.exec(
+      select(Organization)
+      .where(col(Organization.name).ilike(f"%{query}%"))
+      .limit(limit)
+    ).all()
+  
+  def getById(self, id: int) -> Organization:
+    org = self.db.get(Organization, id)
+    if not org:
+      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found!")
+    return org
+  
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\org\services\OrgService.py
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\org\services\OrgService.py
 import random
 from src.org.repository.OrgRepository import OrgRepository
 # 1. Update imports to use the new DTOs
@@ -3501,6 +3672,12 @@ from src.menutemplate.model.MenuTemplate import MenuTemplate
 from src.email.EmailService import EmailService
 from src.utils.Constants import OTP_POPULATION_DIGITS
 from src.db.repository.UserOrgLinkRepository import UserOrgLinkRepository
+from src.org.dtos.OrgSearchResDto import OrgSearchResDto
+from src.project.model.Project import Project
+from src.db.links.UserProjectLink import UserProjectLink
+from src.db.links.PermissionType import PermissionType
+from src.project.repository.ProjectRepository import ProjectRepository
+from src.db.repository.UserProjectLinkRepository import UserProjectLinkRepository
 
 class OrgService:
   def __init__(
@@ -3512,7 +3689,9 @@ class OrgService:
       fileService: FileService,
       emailService : EmailService,
       userOrgLinkRepo: UserOrgLinkRepository,
-      mtRepo: MenuTemplateRepository
+      mtRepo: MenuTemplateRepository,
+      projectRepo: ProjectRepository,
+      userProjectLinkRepo: UserProjectLinkRepository
     ):
     self.repo = orgRepo
     self.userRepo = userRepo
@@ -3522,12 +3701,15 @@ class OrgService:
     self.emailService = emailService
     self.userOrgLinkRepo = userOrgLinkRepo
     self.mtRepo = mtRepo
+    self.projectRepo = projectRepo
+    self.userProjectLinkRepo = userProjectLinkRepo
 
   # 2. Update signature to use OrgCreateRequestDto -> OrgCreateResponseDto
   def createOrg(self, reqDto: OrgCreateRequestDto) -> OrgCreateResponseDto:
     
     try:
       domain = reqDto.email.split("@")[1]
+      domainName = domain.split(".")[0]
     except IndexError:
       raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email format"
@@ -3572,7 +3754,8 @@ class OrgService:
       password=self.crypto.hash(truncatedPassword),
       verified=False, 
       otp=otp,
-      orgs=[newOrg]
+      orgs=[newOrg],
+      projects=[],
     ))
 
     userOrgLink = self.userOrgLinkRepo.get(userId=newUser.id, orgId=newOrg.id)
@@ -3583,9 +3766,22 @@ class OrgService:
       userOrgLink.disabled = False
       self.userOrgLinkRepo.edit(userOrgLink)
 
+    defaultProject = self.projectRepo.add(Project(
+      name=f"{domainName.capitalize()} Project",
+      description=f"Automatically created {domainName} project, during organization registration.",
+      orgId=newOrg.id
+    ))
+
+    self.userProjectLinkRepo.add(UserProjectLink(
+      userId=newUser.id,
+      projectId=defaultProject.id,
+      super=True,
+      permissionType=PermissionType.OWNER,
+      disabled=False
+    ))
+
     self.emailService.sendAccountVerificationOtp(newUser.email, otp)
 
-    # 3. Return the new Response DTO
     return OrgCreateResponseDto(
       id=newOrg.id, 
       name=newOrg.name, 
@@ -3595,8 +3791,17 @@ class OrgService:
   def generateOtp(self)->str:
     otp = ''.join(random.choices(OTP_POPULATION_DIGITS, k=6))
     return otp
+  
+  def searchOrg(self, query: str) -> list[OrgSearchResDto]:
+    # We limit to 10 results to keep the autocomplete fast
+    orgs = self.repo.search(query, limit=10)
+    
+    return [
+      OrgSearchResDto(id=o.id, name=o.name) 
+      for o in orgs
+    ]
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\project\ProjectRouter.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\project\ProjectRouter.py
 from fastapi import APIRouter, Request, status, HTTPException
 from di import ProjectServiceDep, UserServiceDep
 from src.project.dtos.ProjectCreateRequestDto import ProjectCreateRequestDto
@@ -3604,6 +3809,9 @@ from src.project.dtos.ProjectCreateResponseDto import ProjectCreateResponseDto
 from src.project.dtos.ProjectResponseDto import ProjectResponseDto
 from src.utils.pagination.PaginationRequestDto import PaginationRequestDto
 from src.utils.pagination.PaginationResponseDto import PaginationResponseDto
+from src.project.dtos.ProjectAssignUserRequestDto import ProjectAssignUserRequestDto
+from src.project.dtos.ProjectAssignUserResponseDto import ProjectAssignUserResponseDto
+from src.project.dtos.ProjectRemoveUserResponseDto import ProjectRemoveUserResponseDto
 
 routes = APIRouter()
 
@@ -3644,7 +3852,73 @@ async def getProjects(
 ) -> PaginationResponseDto[ProjectResponseDto]:  
   return projectService.getProjects(reqDto)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\project\dtos\ProjectCreateRequestDto.py
+@routes.post(
+  "/projects/{projectId}/users",
+  tags=["project"],
+  name="act:assign-user-to-project",
+  response_model=ProjectAssignUserResponseDto
+)
+async def assignUserToProject(
+  projectId: int,
+  reqDto: ProjectAssignUserRequestDto,
+  projectService: ProjectServiceDep
+) -> ProjectAssignUserResponseDto:
+  """
+  Assign an existing user to a project with a specific permission level.
+  """
+  return projectService.assignUser(projectId, reqDto)
+
+@routes.get(
+  "/projects/user/{userId}",
+  tags=["project"],
+  name="act:get-user-projects",
+  response_model=list[ProjectResponseDto]
+)
+async def getProjectsByUser(
+  userId: int,
+  projectService: ProjectServiceDep
+) -> list[ProjectResponseDto]:
+  """
+  Get all projects assigned to a specific user.
+  """
+  return projectService.getProjectsByUserId(userId)
+
+
+@routes.delete(
+  "/projects/{projectId}/users/{userId}",
+  tags=["project"],
+  name="act:remove-user-from-project",
+  response_model=ProjectRemoveUserResponseDto
+)
+async def removeUserFromProject(
+  projectId: int,
+  userId: int,
+  projectService: ProjectServiceDep
+) -> ProjectRemoveUserResponseDto:
+  """
+  Remove (unassign) a user from a specific project.
+  """
+  return projectService.removeUserFromProject(projectId, userId)
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\project\dtos\ProjectAssignUserRequestDto.py
+from dataclasses import dataclass
+from src.db.links.PermissionType import PermissionType
+
+@dataclass
+class ProjectAssignUserRequestDto:
+  userId: int
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\project\dtos\ProjectAssignUserResponseDto.py
+from dataclasses import dataclass
+from src.db.links.PermissionType import PermissionType
+
+@dataclass
+class ProjectAssignUserResponseDto:
+  projectId: int
+  userId: int
+  message: str
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\project\dtos\ProjectCreateRequestDto.py
 from dataclasses import dataclass
 from pydantic import constr
 
@@ -3654,7 +3928,7 @@ class ProjectCreateRequestDto:
   orgId: int # Required (No default value)
   description: str | None = None # Optional (Has default value, so must go last)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\project\dtos\ProjectCreateResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\project\dtos\ProjectCreateResponseDto.py
 from dataclasses import dataclass
 
 @dataclass
@@ -3663,7 +3937,14 @@ class ProjectCreateResponseDto:
   name: str
   orgId: int
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\project\dtos\ProjectResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\project\dtos\ProjectRemoveUserResponseDto.py
+from dataclasses import dataclass
+
+@dataclass
+class ProjectRemoveUserResponseDto:
+  message: str
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\project\dtos\ProjectResponseDto.py
 from dataclasses import dataclass
 from typing import Optional
 
@@ -3675,7 +3956,7 @@ class ProjectResponseDto:
   orgId: int
   orgName: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\project\model\Project.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\project\model\Project.py
 from sqlmodel import Field, SQLModel, Relationship
 from sqlalchemy import Column, DateTime, func
 from datetime import datetime
@@ -3708,8 +3989,9 @@ class Project(SQLModel, table=True):
     )
   )
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\project\repository\ProjectRepository.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\project\repository\ProjectRepository.py
 from abc import ABC, abstractmethod
+from src.db.links.UserProjectLink import UserProjectLink
 from src.project.model.Project import Project
 
 class ProjectRepository(ABC):
@@ -3729,13 +4011,19 @@ class ProjectRepository(ABC):
   def countAllProjects(self, orgId: int) -> int:
     pass
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\project\repository\ProjectRepositoryImp.py
+  @abstractmethod
+  def getAllByUserId(self, userId: int) -> list[tuple[Project, UserProjectLink]]:
+    pass
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\project\repository\ProjectRepositoryImp.py
+from src.db.links.UserProjectLink import UserProjectLink
 from src.project.repository.ProjectRepository import ProjectRepository
 from src.project.model.Project import Project
 from db import DBSessionDep
 from fastapi import status, HTTPException
 from sqlmodel import select
 from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 
 class ProjectRepositoryImp(ProjectRepository):
   def __init__(self, db: DBSessionDep):
@@ -3776,8 +4064,17 @@ class ProjectRepositoryImp(ProjectRepository):
       select(func.count(Project.id))
       .where(Project.orgId == orgId)
     ).one()
+  
+  def getAllByUserId(self, userId: int) -> list[tuple[Project, UserProjectLink]]:
+    return self.db.exec(
+      select(Project, UserProjectLink)
+      .join(UserProjectLink, Project.id == UserProjectLink.projectId)
+      .where(UserProjectLink.userId == userId)
+      .options(selectinload(Project.org))
+    ).all()
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\project\services\ProjectService.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\project\services\ProjectService.py
+from src.db.repository.UserOrgLinkRepository import UserOrgLinkRepository
 from src.project.repository.ProjectRepository import ProjectRepository
 from src.db.repository.UserProjectLinkRepository import UserProjectLinkRepository
 from src.project.dtos.ProjectCreateRequestDto import ProjectCreateRequestDto
@@ -3788,32 +4085,41 @@ from src.db.links.UserProjectLink import UserProjectLink
 from src.utils.pagination.PaginationRequestDto import PaginationRequestDto
 from src.utils.pagination.PaginationResponseDto import PaginationResponseDto
 from src.db.links.PermissionType import PermissionType
+from fastapi import status, HTTPException
+from src.project.dtos.ProjectAssignUserRequestDto import ProjectAssignUserRequestDto
+from src.project.dtos.ProjectAssignUserResponseDto import ProjectAssignUserResponseDto
+from src.db.links.UserProjectLink import UserProjectLink
+from src.project.dtos.ProjectRemoveUserResponseDto import ProjectRemoveUserResponseDto
 
 class ProjectService:
   def __init__(
       self, 
       projectRepo: ProjectRepository, 
-      linkRepo: UserProjectLinkRepository
+      linkRepo: UserProjectLinkRepository,
+      userOrgLinkRepo: UserOrgLinkRepository
     ):
     self.repo = projectRepo
     self.linkRepo = linkRepo
+    self.userOrgLinkRepo = userOrgLinkRepo
 
   def createProject(self, reqDto: ProjectCreateRequestDto, userId: int) -> ProjectCreateResponseDto:
-    # 1. Create the project
     newProject = self.repo.add(Project(
       name=reqDto.name,
       description=reqDto.description,
       orgId=reqDto.orgId
     ))
 
-    # 2. Link the creating user as a Super Admin for this project
-    self.linkRepo.add(UserProjectLink(
-      userId=userId,
-      projectId=newProject.id,
-      super=True,
-      disabled=False,
-      permissionType=PermissionType.OWNER
-    ))
+    superAdminLinks = self.userOrgLinkRepo.getSuperAdminsByOrgId(reqDto.orgId)
+
+    for adminLink in superAdminLinks:
+      if adminLink.userId:
+        self.linkRepo.add(UserProjectLink(
+          userId=adminLink.userId, 
+          projectId=newProject.id,
+          super=True,
+          disabled=False,
+          permissionType=PermissionType.OWNER
+        ))
 
     return ProjectCreateResponseDto(
       id=newProject.id,
@@ -3844,8 +4150,70 @@ class ProjectService:
       ))
 
     return PaginationResponseDto[ProjectResponseDto](items=items, total=total)
+  
+  def assignUser(self, projectId: int, reqDto: ProjectAssignUserRequestDto) -> ProjectAssignUserResponseDto:
+    # 1. Check if Project exists
+    project = self.repo.getProjectById(projectId) # raises 404 if not found
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\role\RoleRouter.py
+    # 2. Check if User is already assigned to this project
+    existingLink = self.linkRepo.get(userId=reqDto.userId, projectId=projectId)
+    if existingLink:
+      raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT, 
+        detail="User is already assigned to this project!"
+      )
+
+    # 3. Create the assignment
+    newLink = UserProjectLink(
+      userId=reqDto.userId,
+      projectId=projectId,
+      permissionType=PermissionType.EDITOR,
+      disabled=False,
+      super=False # Default to false for regular assignments
+    )
+    
+    self.linkRepo.add(newLink)
+
+    return ProjectAssignUserResponseDto(
+      projectId=projectId,
+      userId=reqDto.userId,
+      message="User assigned to project successfully"
+    )
+  
+  def getProjectsByUserId(self, userId: int) -> list[ProjectResponseDto]:
+    results = self.repo.getAllByUserId(userId)
+    
+    responseList = []
+    for project, link in results:
+      responseList.append(ProjectResponseDto(
+        id=project.id,
+        name=project.name,
+        description=project.description,
+        orgId=project.orgId,
+        orgName=project.org.name if project.org else ""
+      ))
+      
+    return responseList
+  
+  def removeUserFromProject(self, projectId: int, userId: int) -> ProjectRemoveUserResponseDto:
+    # 1. Find the assignment
+    link = self.linkRepo.get(userId=userId, projectId=projectId)
+    
+    # 2. If no link exists, we can't delete it
+    if not link:
+      raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND, 
+        detail="User is not assigned to this project!"
+      )
+
+    # 3. Hard Delete (Remove row from DB)
+    self.linkRepo.delete(link)
+
+    return ProjectRemoveUserResponseDto(
+      message="User removed from project successfully"
+    )
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\role\RoleRouter.py
 from fastapi import APIRouter
 from src.role.dtos.RoleCreateRequestDto import RoleCreateRequestDto
 from src.role.dtos.RoleCreateResponseDto import RoleCreateResponseDto
@@ -3881,7 +4249,7 @@ async def getRoles(
 ) -> PaginationResponseDto[RoleResponseDto]:  
   return roleService.getRoles(reqDto)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\role\dtos\RoleCreateRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\role\dtos\RoleCreateRequestDto.py
 from dataclasses import dataclass
 from pydantic import constr
 
@@ -3890,7 +4258,7 @@ class RoleCreateRequestDto:
   name: constr(min_length=1) # type: ignore
   orgId: int # Added: Required to scope the role
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\role\dtos\RoleCreateResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\role\dtos\RoleCreateResponseDto.py
 from dataclasses import dataclass
 
 @dataclass
@@ -3898,7 +4266,7 @@ class RoleCreateResponseDto:
   id: int
   name: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\role\dtos\RoleResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\role\dtos\RoleResponseDto.py
 from dataclasses import dataclass
 
 @dataclass
@@ -3906,7 +4274,7 @@ class RoleResponseDto:
   id: int
   name: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\role\model\Role.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\role\model\Role.py
 from sqlmodel import Field, SQLModel, Relationship
 from typing import Optional
 from datetime import datetime
@@ -3933,7 +4301,7 @@ class Role(SQLModel, table=True):
     )
   )
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\role\repository\RoleRepository.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\role\repository\RoleRepository.py
 from abc import ABC, abstractmethod
 from src.role.model.Role import Role
 
@@ -3954,7 +4322,7 @@ class RoleRepository(ABC):
   def countAllRole(self, orgId: int) -> int:
     pass
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\role\repository\RoleRepositoryImp.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\role\repository\RoleRepositoryImp.py
 from src.role.repository.RoleRepository import RoleRepository
 from src.role.model.Role import Role
 from db import DBSessionDep
@@ -4007,7 +4375,7 @@ class RoleRepositoryImp(RoleRepository):
       .where(Role.orgId == orgId)
     ).one()
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\role\services\RoleService.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\role\services\RoleService.py
 from src.role.repository.RoleRepository import RoleRepository
 from src.role.dtos.RoleCreateRequestDto import RoleCreateRequestDto
 from src.role.dtos.RoleCreateResponseDto import RoleCreateResponseDto
@@ -4051,11 +4419,11 @@ class RoleService:
 
     return PaginationResponseDto[RoleResponseDto](items=roleResponseDtoList, total=total)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\user\UserInsecureRouter.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\user\UserInsecureRouter.py
 from fastapi import APIRouter
 from di import UserServiceDep
-from src.user.dtos.UserCreateRequestDto import UserCreateRequestDto
-from src.user.dtos.UserCreateResponseDto import UserCreateResponseDto
+from src.user.dtos.UserRegistrationRequestDto import UserRegistrationRequestDto
+from src.user.dtos.UserRegistrationResponseDto import UserRegistrationResponseDto
 from src.user.dtos.UserVerificationRequestDto import UserVerificationRequestDto
 from src.user.dtos.UserVerificationResponseDto import UserVerificationResponseDto
 from src.user.dtos.ForgotPasswordOtpRequestDto import ForgotPasswordOtpRequestDto
@@ -4065,14 +4433,14 @@ routes = APIRouter()
 
 @routes.post(
   "/users/registration", 
-  response_model=UserCreateResponseDto, 
+  response_model=UserRegistrationResponseDto, 
   tags=["user"]
 )
 async def registration(
-    reqDto: UserCreateRequestDto,
+    reqDto: UserRegistrationRequestDto,
     userServiceDep: UserServiceDep
-  )->UserCreateResponseDto:
-  return userServiceDep.createUser(reqDto)
+  )->UserRegistrationResponseDto:
+  return userServiceDep.registerUser(reqDto)
 
 @routes.post("/users/verify", tags=["user"])
 async def verify(
@@ -4088,7 +4456,7 @@ async def forgotPassword(
   )-> ForgotPasswordOtpResponseDto:
   return userService.sendForgotPasswordOtp(reqDto)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\user\UserRouter.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\user\UserRouter.py
 from fastapi import APIRouter, Request
 from src.org.dtos.OrgAddResDto import OrgAddResDto
 from src.org.dtos.OrgAddReqDto import OrgAddReqDto
@@ -4150,7 +4518,24 @@ async def getUsers(
 ) -> PaginationResponseDto[UserResponseDto]:  
   return userService.getUsers(reqDto)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\user\dtos\ForgotPasswordOtpRequestDto.py
+@routes.get(
+  "/{userId}/orgs/{orgId}/details", 
+  tags=["user"],
+  name="act:get-user-org-details",
+  response_model=UserResponseDto
+)
+def getUserDetailsByOrgAndUser(
+    userId: int, 
+    orgId: int, 
+    userService: UserServiceDep
+) -> UserResponseDto:
+  """
+  Get detailed user information specifically for a given organization context,
+  including their Role Name and Menu Template Name.
+  """
+  return userService.getUserDetailsByOrgAndUser(userId, orgId)
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\user\dtos\ForgotPasswordOtpRequestDto.py
 from dataclasses import dataclass
 from pydantic import EmailStr, constr
 
@@ -4158,14 +4543,14 @@ from pydantic import EmailStr, constr
 class ForgotPasswordOtpRequestDto:
   email: EmailStr
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\user\dtos\ForgotPasswordOtpResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\user\dtos\ForgotPasswordOtpResponseDto.py
 from dataclasses import dataclass
 
 @dataclass
 class ForgotPasswordOtpResponseDto:
   message: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\user\dtos\UpdateUserRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\user\dtos\UpdateUserRequestDto.py
 from dataclasses import dataclass
 from typing import Optional
 
@@ -4179,7 +4564,7 @@ class UpdateUserRequestDto:
   roleId: Optional[int] = None 
   menuTemplateId: Optional[int] = None
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\user\dtos\UpdateUserResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\user\dtos\UpdateUserResponseDto.py
 from dataclasses import dataclass
 
 @dataclass
@@ -4191,15 +4576,16 @@ class UpdateUserResponseDto:
   lastName: str
   contactNumber: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\user\dtos\UserCreateRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\user\dtos\UserRegistrationRequestDto.py
 from dataclasses import dataclass
 from pydantic import EmailStr, constr, field_validator
 from config import Config
 
 @dataclass
-class UserCreateRequestDto:
+class UserRegistrationRequestDto:
   email: EmailStr
   password: constr(min_length=1) # type: ignore
+  orgId: int 
   
   @field_validator("password")
   def validatePassword(cls, password):
@@ -4215,17 +4601,17 @@ class UserCreateRequestDto:
       raise ValueError("Password must contain at least one special character!")
     return password
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\user\dtos\UserCreateResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\user\dtos\UserRegistrationResponseDto.py
 from dataclasses import dataclass
 from pydantic import EmailStr
 
 @dataclass
-class UserCreateResponseDto:
+class UserRegistrationResponseDto:
   id: int
   email: EmailStr
   message: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\user\dtos\UserResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\user\dtos\UserResponseDto.py
 from dataclasses import dataclass
 from pydantic import EmailStr
 from typing import Optional
@@ -4240,8 +4626,12 @@ class UserResponseDto:
   contactNumber: str
   disabled: Optional[bool] = None
   super: Optional[str] = None
+  roleId: Optional[int] = None
+  menuTemplateId: Optional[int] = None
+  roleName: Optional[str] = None
+  menuTemplateName: Optional[str] = None
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\user\dtos\UserVerificationRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\user\dtos\UserVerificationRequestDto.py
 from pydantic import EmailStr, constr
 from dataclasses import dataclass
 
@@ -4251,14 +4641,14 @@ class UserVerificationRequestDto:
   email: EmailStr
   
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\user\dtos\UserVerificationResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\user\dtos\UserVerificationResponseDto.py
 from dataclasses import dataclass
 
 @dataclass
 class UserVerificationResponseDto:
   message: str
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\user\model\User.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\user\model\User.py
 from typing import Optional
 from datetime import datetime
 from sqlmodel import Field, SQLModel, Relationship
@@ -4279,7 +4669,6 @@ class User(SQLModel, table=True):
   firstName: str = Field(default=None, nullable=True)
   lastName: str = Field(default=None, nullable=True)
   contactNumber: str = Field(default=None, nullable=True)
-  menuTemplates: list["MenuTemplate"] = Relationship(back_populates="user") # type: ignore
   projects: list["Project"] = Relationship(back_populates="users", link_model=UserProjectLink) # type: ignore
   createdAt: Optional[datetime] = Field(
     sa_column=Column(
@@ -4294,7 +4683,7 @@ class User(SQLModel, table=True):
     
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\user\repository\UserRepository.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\user\repository\UserRepository.py
 from abc import ABC, abstractmethod
 from src.user.model.User import User
 
@@ -4323,7 +4712,11 @@ class UserRepository(ABC):
   def countAllUser(self, orgId: int) -> int:
     pass
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\user\repository\UserRepositoryImp.py
+  @abstractmethod
+  def getUserDetailsByOrgAndUser(self, userId: int, orgId: int):
+    pass
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\user\repository\UserRepositoryImp.py
 from src.user.repository.UserRepository import UserRepository
 from src.user.model.User import User
 from db import DBSessionDep
@@ -4331,6 +4724,8 @@ from fastapi import status, HTTPException
 from sqlmodel import select
 from sqlalchemy import func
 from src.db.links.UserOrgLink import UserOrgLink
+from src.role.model.Role import Role
+from src.menutemplate.model.MenuTemplate import MenuTemplate
 
 class UserRepositoryImp(UserRepository):
   def __init__(self, db: DBSessionDep):
@@ -4368,8 +4763,10 @@ class UserRepositoryImp(UserRepository):
   def getAllUser(self, rows: int, page: int, orgId: int)->list[User]:
     offset: int = (page - 1) * rows
     return self.db.exec(
-      select(User, UserOrgLink)
+      select(User, UserOrgLink, Role, MenuTemplate)
       .join(UserOrgLink, UserOrgLink.userId == User.id)
+      .join(Role, UserOrgLink.roleId == Role.id, isouter=True)
+      .join(MenuTemplate, UserOrgLink.menuTemplateId == MenuTemplate.id, isouter=True)
       .where(UserOrgLink.orgId == orgId)
       .offset(offset).limit(rows)
     ).all()
@@ -4381,12 +4778,22 @@ class UserRepositoryImp(UserRepository):
       .join(User, UserOrgLink.userId==User.id)
       .where(UserOrgLink.orgId == orgId)
     ).one()
+  
+  def getUserDetailsByOrgAndUser(self, userId: int, orgId: int):
+    return self.db.exec(
+      select(User, UserOrgLink, Role.name, MenuTemplate.name)
+      .join(UserOrgLink, UserOrgLink.userId == User.id)
+      .join(Role, UserOrgLink.roleId == Role.id, isouter=True) 
+      .join(MenuTemplate, UserOrgLink.menuTemplateId == MenuTemplate.id, isouter=True)
+      .where(User.id == userId)
+      .where(UserOrgLink.orgId == orgId)
+    ).first()
     
     
 
   
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\user\services\UserService.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\user\services\UserService.py
 import random
 from config import Config
 from src.user.model.User import User
@@ -4395,8 +4802,8 @@ from passlib.context import CryptContext
 from fastapi import status, HTTPException
 from src.org.dtos.OrgAddReqDto import OrgAddReqDto
 from src.org.dtos.OrgAddResDto import OrgAddResDto
-from src.user.dtos.UserCreateRequestDto import UserCreateRequestDto
-from src.user.dtos.UserCreateResponseDto import UserCreateResponseDto
+from src.user.dtos.UserRegistrationRequestDto import UserRegistrationRequestDto
+from src.user.dtos.UserRegistrationResponseDto import UserRegistrationResponseDto
 from src.user.repository.UserRepository import UserRepository
 from src.user.dtos.UserResponseDto import UserResponseDto
 from src.user.dtos.UserVerificationRequestDto import UserVerificationRequestDto
@@ -4431,22 +4838,28 @@ class UserService:
     self.orgRepo = orgRepository
     self.userOrgLinkRepo = userOrgLinkRepo
 
-  def createUser(self, reqDto : UserCreateRequestDto) -> UserCreateResponseDto:
-    otp = self.generateOtp()
+  def registerUser(self, reqDto : UserRegistrationRequestDto) -> UserRegistrationResponseDto:
+    org = self.orgRepo.getById(reqDto.orgId)
     
+    otp = self.generateOtp()
     truncatedPassword = reqDto.password[:72]
     
     newUser = self.repo.add(User(
       email=reqDto.email,
       password=self.crypto.hash(truncatedPassword),
       otp=otp,
-      orgs=[],         
+      orgs=[org],         
       menuTemplates=[] 
     ))
 
     self.emailService.sendAccountVerificationOtp(newUser.email, otp)
 
-    resUser = UserCreateResponseDto(id=newUser.id,email=newUser.email,message=USER_CREATION_RES_MSG)
+    resUser = UserRegistrationResponseDto(
+      id=newUser.id,
+      email=newUser.email,
+      message=USER_CREATION_RES_MSG
+    )
+
     return resUser
   
   def getUserById(self, id: int)-> UserResponseDto:
@@ -4599,7 +5012,8 @@ class UserService:
     if reqDto.total is None or reqDto.total == 0:
       total = self.repo.countAllUser(orgId=reqDto.orgId)
 
-    for u,l in users:
+    for u,l,r,mt in users:
+      
       urDto: UserResponseDto = UserResponseDto(
         id=u.id,
         email=u.email,
@@ -4608,14 +5022,47 @@ class UserService:
         lastName=u.lastName,
         verified=u.verified,
         super=l.super,
-        disabled=l.disabled
+        disabled=l.disabled,
+        roleId=r.id if r else None,
+        menuTemplateId=mt.id if mt else None, 
+        roleName=r.name if r else None,
+        menuTemplateName=mt.name if mt else None
       )
 
       userResponseDtoList.append(urDto)
 
     return PaginationResponseDto[UserResponseDto](items=userResponseDtoList, total=total)
+  
+  def getUserDetailsByOrgAndUser(self, userId: int, orgId: int) -> UserResponseDto: 
+    # 1. Call the repo method (returns Tuple of 4 items)
+    result = self.repo.getUserDetailsByOrgAndUser(userId, orgId)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\utils\CacheService.py
+    if not result:
+      raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND, 
+        detail="User not found in this organization!"
+      )
+    
+    # 2. Unpack the tuple
+    user, link, roleName, mtName = result
+
+    # 3. Return the DTO
+    return UserResponseDto(
+      id=user.id,
+      email=user.email,
+      verified=user.verified,
+      firstName=user.firstName,
+      lastName=user.lastName,
+      contactNumber=user.contactNumber,
+      disabled=link.disabled,
+      super=link.super,
+      roleId=link.roleId,
+      menuTemplateId=link.menuTemplateId,
+      roleName=roleName,
+      menuTemplateName=mtName
+    )
+
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\utils\CacheService.py
 import json
 import redis
 from typing import Optional, Any
@@ -4640,13 +5087,13 @@ class CacheService:
   def delete(self, key: str):
     self.client.delete(key)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\utils\Constants.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\utils\Constants.py
 OTP_POPULATION_DIGITS = "0123456789"
 USER_CREATION_RES_MSG = (
   "A otp has been sent to your mail, please use the otp and verify your account!"
 )
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\utils\FileService.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\utils\FileService.py
 from pathlib import Path
 
 class FileService:
@@ -4665,7 +5112,7 @@ class FileService:
       # Return empty JSON list as fallback
       return "[]"
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\utils\pagination\PaginationRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\utils\pagination\PaginationRequestDto.py
 from dataclasses import dataclass
 from pydantic import Field
 from typing import Optional
@@ -4682,7 +5129,7 @@ class PaginationRequestDto:
 
 
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\utils\pagination\PaginationResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\utils\pagination\PaginationResponseDto.py
 from dataclasses import dataclass
 
 @dataclass
@@ -4690,7 +5137,7 @@ class PaginationResponseDto[T]:
   items: list[T]
   total: int
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\variation\VariationRouter.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\variation\VariationRouter.py
 from fastapi import APIRouter
 from di import VariationServiceDep
 from src.variation.dtos.VariationCreateRequestDto import VariationCreateRequestDto
@@ -4741,7 +5188,7 @@ async def updateTrafficAllocation(
 ) -> list[VariationResponseDto]:
   return service.updateTrafficAllocation(experimentId, reqDto)
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\variation\dtos\TrafficAllocationRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\variation\dtos\TrafficAllocationRequestDto.py
 from dataclasses import dataclass
 from typing import List
 from pydantic import BaseModel, field_validator
@@ -4760,7 +5207,7 @@ class TrafficAllocationRequestDto(BaseModel):
       raise ValueError(f"Total traffic allocation must equal 100%. Current total: {total}%!")
     return v
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\variation\dtos\VariationCreateRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\variation\dtos\VariationCreateRequestDto.py
 from dataclasses import dataclass
 from typing import Optional
 from pydantic import constr
@@ -4771,7 +5218,7 @@ class VariationCreateRequestDto:
   js: Optional[str] = None
   css: Optional[str] = None
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\variation\dtos\VariationResponseDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\variation\dtos\VariationResponseDto.py
 from dataclasses import dataclass
 from typing import Optional
 
@@ -4784,7 +5231,7 @@ class VariationResponseDto:
   js: Optional[str]
   css: Optional[str]
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\variation\dtos\VariationUpdateRequestDto.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\variation\dtos\VariationUpdateRequestDto.py
 from typing import Optional
 from pydantic import BaseModel, model_validator, constr
 
@@ -4799,7 +5246,7 @@ class VariationUpdateRequestDto(BaseModel):
       raise ValueError("At least one field (title, js, css) must be provided!")
     return self
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\variation\model\Variation.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\variation\model\Variation.py
 from sqlmodel import Field, SQLModel, Relationship
 from sqlalchemy import Text, Column, DateTime, func
 from typing import Optional
@@ -4825,7 +5272,7 @@ class Variation(SQLModel, table=True):
     )
   )
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\variation\repository\VariationRepository.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\variation\repository\VariationRepository.py
 from abc import ABC, abstractmethod
 from src.variation.model.Variation import Variation
 
@@ -4851,7 +5298,7 @@ class VariationRepository(ABC):
   def edit(self, variation: Variation) -> Variation:
     pass
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\variation\repository\VariationRepositoryImp.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\variation\repository\VariationRepositoryImp.py
 from src.variation.repository.VariationRepository import VariationRepository
 from src.variation.model.Variation import Variation
 from db import DBSessionDep
@@ -4893,7 +5340,7 @@ class VariationRepositoryImp(VariationRepository):
     self.db.refresh(variation)
     return variation
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\src\variation\services\VariationService.py
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\src\variation\services\VariationService.py
 from src.variation.repository.VariationRepository import VariationRepository
 from src.experiment.repository.ExperimentRepository import ExperimentRepository
 from src.variation.dtos.VariationCreateRequestDto import VariationCreateRequestDto
@@ -4994,7 +5441,7 @@ class VariationService:
       css=v.css
     )
 
-file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\static\menu.json
+file path: C:\Users\Shahriar Kabir\Documents\Personal\ABTestingToolServer\static\menu.json
 [
   {
     "key": "1",
@@ -5063,32 +5510,16 @@ file path: C:\Users\Shahriar\Documents\Projects\Personal\ABTestingTool\static\me
   },
   {
     "key": "7",
-    "label": "Menu",
-    "icon": "pi pi-fw pi-bars",
-    "children": [
-      {
-        "key": "7-1",
-        "label": "Template",
-        "icon": "pi pi-fw pi-list",
-        "data": {
-          "href": "/menu/template",
-          "actions": [
-            "Act:Create-Menu-Template",
-            "Act:Get-Menu-Template",
-            "Act:Get-Menu-Templates"
-          ]
-        }
-      },
-      {
-        "key": "7-2",
-        "label": "Manage",
-        "icon": "pi pi-fw pi-cog",
-        "data": {
-          "href": "/menu/manage",
-          "actions": ["Act:Create-Menu", "Act:Get-Menus"]
-        }
-      }
-    ]
+    "label": "Menu Template",
+    "icon": "pi pi-fw pi-list",
+    "data": {
+      "href": "/menu-template",
+      "actions": [
+        "Act:Create-Menu-Template",
+        "Act:Get-Menu-Template",
+        "Act:Get-Menu-Templates"
+      ]
+    }
   }
 ]
 

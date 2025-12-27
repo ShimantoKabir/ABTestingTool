@@ -65,19 +65,20 @@ async def assignUserToProject(
   return projectService.assignUser(projectId, reqDto)
 
 @routes.get(
-  "/projects/user/{userId}",
+  "/projects/user/{userId}/org/{orgId}",
   tags=["project"],
-  name="act:get-user-projects",
+  name="act:get-projects-by-user-and-org",
   response_model=list[ProjectResponseDto]
 )
-async def getProjectsByUser(
+async def getProjectsByUserIdAndOrgId(
   userId: int,
+  orgId: int,
   projectService: ProjectServiceDep
 ) -> list[ProjectResponseDto]:
   """
   Get all projects assigned to a specific user.
   """
-  return projectService.getProjectsByUserId(userId)
+  return projectService.getProjectsByUserIdAndOrgId(userId, orgId)
 
 
 @routes.delete(

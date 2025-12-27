@@ -27,7 +27,7 @@ class AuthService:
     self.userOrgLinkRepo = userOrgLinkRepo
     self.userProjectLinkRepo = userProjectLinkRepo
 
-  def login(self, reqDto: LoginRequestDto) -> str:
+  def login(self, reqDto: LoginRequestDto) -> LoginResponseDto: # Updated return type hint
     dbUser: User = self.repo.getUserByEmail(reqDto.email)
 
     if not dbUser:
@@ -41,38 +41,45 @@ class AuthService:
     if not isPasswordVerified:
       raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect password!")
     
-    activeOrgs = []
+    # --- NEW NESTED LOGIC START ---
+    activeOrgsWithProjects = []
+
     for org in dbUser.orgs:
-      link = self.userOrgLinkRepo.get(dbUser.id, org.id)
+      # 1. Check if User is active in this Org
+      orgLink = self.userOrgLinkRepo.get(dbUser.id, org.id)
+      if not orgLink or orgLink.disabled:
+        continue
+
+      # 2. Find valid projects for this specific Org
+      orgProjects = []
+      for project in dbUser.projects:
+        # Only check projects belonging to the current loop's organization
+        if project.orgId == org.id:
+          projLink = self.userProjectLinkRepo.get(dbUser.id, project.id)
+          
+          if projLink and not projLink.disabled:
+            orgProjects.append({
+              "id": project.id,
+              "name": project.name
+            })
       
-      if link and not link.disabled:
-        activeOrgs.append({
+      # 3. Build the nested structure
+      activeOrgsWithProjects.append({
         "id": org.id,
-        "name": org.name
+        "name": org.name,
+        "projects": orgProjects
       })
     
-    if not activeOrgs:
+    # --- NEW NESTED LOGIC END ---
+
+    if not activeOrgsWithProjects:
       raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN, 
         detail="Your account is disabled in all organizations!"
       )
 
-    activeProjects = []
-    for project in dbUser.projects:
-      link = self.userProjectLinkRepo.get(dbUser.id, project.id)
-      
-      if link and not link.disabled:
-        activeProjects.append({
-        "id": project.id,
-        "name": project.name
-      })
-    if not activeProjects:
-      raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN, 
-        detail="You do not have any project assigned!"
-      )
-
-    token = self.generateToken(dbUser, activeOrgs, activeProjects)
+    # Note: We now pass the nested list. We no longer need a separate 'projects' argument.
+    token = self.generateToken(dbUser, activeOrgsWithProjects)
 
     res = LoginResponseDto(accessToken=token.accessToken, refreshToken=token.refreshToken)
     return res
@@ -100,7 +107,7 @@ class AuthService:
     res  = AuthRefreshResponseDto(accessToken=token.accessToken,refreshToken=token.refreshToken)
     return res
   
-  def generateToken(self, user: User, orgs, projects)->Token:
+  def generateToken(self, user: User, orgs : list)->Token:
     accessTokenExpires = datetime.now(timezone.utc) + timedelta(minutes=int(Config.getValByKey("ACCESS_TOKEN_EXPIRE_MINUTES")))
     refreshTokenExpires = datetime.now(timezone.utc) + timedelta(minutes=int(Config.getValByKey("REFRESH_TOKEN_EXPIRE_MINUTES")))
 
@@ -108,7 +115,6 @@ class AuthService:
       "sub" : user.email,
       "userId": user.id,
       "orgs" : orgs,
-      "projects": projects,
       "exp" : accessTokenExpires
     }, Config.getValByKey("SECRET_KEY"), Config.getValByKey("ALGORITHM"))
 
@@ -116,7 +122,6 @@ class AuthService:
       "sub" : user.email,
       "userId": user.id,
       "orgs" : orgs,
-      "projects": projects,
       "exp" : refreshTokenExpires
     }, Config.getValByKey("SECRET_KEY"), Config.getValByKey("ALGORITHM"))
     
