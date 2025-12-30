@@ -5,6 +5,7 @@ from src.experiment.dtos.ExperimentCreateResponseDto import ExperimentCreateResp
 from src.experiment.dtos.ExperimentResponseDto import ExperimentResponseDto
 from src.utils.pagination.PaginationRequestDto import PaginationRequestDto
 from src.utils.pagination.PaginationResponseDto import PaginationResponseDto
+from src.experiment.dtos.ExperimentUpdateRequestDto import ExperimentUpdateRequestDto
 
 routes = APIRouter()
 
@@ -43,3 +44,19 @@ async def getExperimentById(
   service: ExperimentServiceDep
 ) -> ExperimentResponseDto:
   return service.getById(id)
+
+@routes.patch(
+  "/experiments/{id}",
+  tags=["experiment"],
+  name="act:update-experiment",
+  response_model=ExperimentResponseDto
+)
+async def updateExperiment(
+  id: int,
+  reqDto: ExperimentUpdateRequestDto,
+  service: ExperimentServiceDep
+) -> ExperimentResponseDto:
+  """
+  Update specific fields of an experiment (Title, Status, Traffic Allocation, etc.)
+  """
+  return service.updateExperiment(id, reqDto)

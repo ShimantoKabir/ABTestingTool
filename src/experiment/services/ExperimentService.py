@@ -1,3 +1,7 @@
+from src.experiment.model.ConditionType import ConditionType
+from src.experiment.model.ExperimentStatus import ExperimentStatus
+from src.experiment.model.TriggerType import TriggerType
+from src.experiment.model.ExperimentType import ExperimentType
 from src.experiment.repository.ExperimentRepository import ExperimentRepository
 from src.project.repository.ProjectRepository import ProjectRepository
 from src.experiment.dtos.ExperimentCreateRequestDto import ExperimentCreateRequestDto
@@ -25,14 +29,14 @@ class ExperimentService:
     newExp = Experiment(
       title=reqDto.title,
       projectId=reqDto.projectId,
-      type=reqDto.type,
+      type=ExperimentType.AB_TEST,
       url=reqDto.url,
-      status=reqDto.status,
-      triggerType=reqDto.triggerType,
-      conditionType=reqDto.conditionType,
+      status=ExperimentStatus.DRAFT,
+      triggerType=TriggerType.IMMEDIATELY,
+      conditionType=ConditionType.ALL,
       description=reqDto.description,
-      js=reqDto.js,
-      css=reqDto.css,
+      js="",
+      css="",
       variations=[],
       conditions=[], 
       metrics=[]     
@@ -73,7 +77,11 @@ class ExperimentService:
     return self._mapToResponse(e)
 
   # 1. Added update logic
-  def updateExperiment(self, id: int, reqDto: ExperimentUpdateRequestDto) -> ExperimentResponseDto:
+  def updateExperiment(
+      self, 
+      id: int, 
+      reqDto: ExperimentUpdateRequestDto
+    ) -> ExperimentResponseDto:
     # Fetch existing experiment
     experiment = self.repo.getById(id)
 

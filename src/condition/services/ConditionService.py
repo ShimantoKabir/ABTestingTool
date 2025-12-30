@@ -69,3 +69,8 @@ class ConditionService:
       urls=c.urls,
       operator=c.operator
     )
+  
+  def getConditions(self, experimentId: int) -> list[ConditionResponseDto]:
+    self.experimentRepo.getById(experimentId)
+    conditions = self.repo.getByExperimentId(experimentId)
+    return [self.mapToResponse(c) for c in conditions]

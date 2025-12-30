@@ -5,10 +5,14 @@
     "data": {
       "href": "/user",
       "actions": [
-        "Act:Get-User",
-        "Act:Update-User",
-        "Act:Add-Organization",
-        "Act:Get-Users"
+        "act:update-user",
+        "act:get-users",
+        "act:get-roles",
+        "act:get-projects-by-user-and-org",
+        "act:get-projects",
+        "act:assign-user-to-project",
+        "act:remove-user-from-project",
+        "act:get-menu-templates"
       ]
     },
     "icon": "pi pi-fw pi-users"
@@ -18,16 +22,29 @@
     "label": "Role",
     "data": {
       "href": "/role",
-      "actions": ["Act:Create-Role", "Act:Get-Roles"]
+      "actions": ["act:create-role", "act:get-roles"]
     },
     "icon": "pi pi-fw pi-shield"
+  },
+  {
+    "key": "7",
+    "label": "Menu",
+    "icon": "pi pi-fw pi-list",
+    "data": {
+      "href": "/menu-template",
+      "actions": [
+        "act:create-menu-template",
+        "act:get-menu-template",
+        "act:get-menu-templates"
+      ]
+    }
   },
   {
     "key": "4",
     "label": "Project",
     "data": {
       "href": "/project",
-      "actions": ["Act:Create-Project", "Act:Get-Projects"]
+      "actions": ["act:create-project", "act:get-projects"]
     },
     "icon": "pi pi-fw pi-folder"
   },
@@ -35,46 +52,25 @@
     "key": "5",
     "label": "Experiment",
     "data": {
-      "href": "/experiment",
+      "href": "/experiments",
       "actions": [
-        "Act:Create-Experiment",
-        "Act:Get-Experiments",
-        "Act:Get-Experiment",
-        "Act:Create-Variation",
-        "Act:Update-Variation",
-        "Act:Update-Traffic-Allocation",
-        "Act:Create-Condition",
-        "Act:Get-Conditions",
-        "Act:Delete-Condition"
+        "act:create-experiment",
+        "act:get-experiments",
+        "act:get-experiment",
+        "act:update-experiment",
+        "act:create-variation",
+        "act:update-variation",
+        "act:update-traffic-allocation",
+        "act:create-condition",
+        "act:get-conditions",
+        "act:delete-condition",
+        "act:create-metric",
+        "act:get-metrics",
+        "act:delete-metric",
+        "act:track-metric",
+        "act:make-decision"
       ]
     },
     "icon": "pi pi-fw pi-bolt"
-  },
-  {
-    "key": "6",
-    "label": "Metric",
-    "data": {
-      "href": "/metric",
-      "actions": [
-        "Act:Create-Metric",
-        "Act:Get-Metrics",
-        "Act:Delete-Metric",
-        "Act:Track-Metric"
-      ]
-    },
-    "icon": "pi pi-fw pi-chart-bar"
-  },
-  {
-    "key": "7",
-    "label": "Menu Template",
-    "icon": "pi pi-fw pi-list",
-    "data": {
-      "href": "/menu-template",
-      "actions": [
-        "Act:Create-Menu-Template",
-        "Act:Get-Menu-Template",
-        "Act:Get-Menu-Templates"
-      ]
-    }
   }
 ]
