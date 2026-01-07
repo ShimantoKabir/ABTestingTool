@@ -1,4 +1,4 @@
-import mmh3
+import mmh3 # type: ignore
 import random
 from fastapi import BackgroundTasks
 from src.bucket.repository.BucketRepository import BucketRepository
@@ -38,20 +38,20 @@ class DecisionService:
       bgTasks: BackgroundTasks
     ) -> DecisionResponseDto:
     
-    # 1. Identity Management
+    # Identity Management
     endUserId = reqDto.endUserId if reqDto.endUserId else random.randint(100000, 999999)
 
-    # 2. Fetch Active Experiments (Redis Cache -> DB)
+    # Fetch Active Experiments (Redis Cache -> DB)
     activeExperiments = self.getActiveExperiments(projectId)
 
     decisions: list[ExperimentDecisionDto] = []
 
     for exp in activeExperiments:
-      # 3. Targeting Check
+      # Targeting Check
       if not self.checkTargeting(exp, reqDto.url):
         continue
 
-      # 4. Consistency Check (Sticky Bucketing)
+      # Consistency Check (Sticky Bucketing)
       existingBucket = self.bucketRepo.get(experimentId=exp.id, endUserId=endUserId)
 
       if existingBucket:
@@ -61,28 +61,31 @@ class DecisionService:
           decisions.append(self.buildDecisionDto(exp, assignedVariation))
       
       else:
-        # 5. The Bucketing Machine
+        # The Bucketing Machine
         hashKey = f"{endUserId}:{exp.id}"
         hashInt = mmh3.hash(hashKey)
         
         # Scale hash to 1 - 10,000
-        bucketVal = (abs(hashInt) % self.MAX_TRAFFIC_VAL) + 1
+        bucketVal = (abs(hashInt) % int(self.MAX_TRAFFIC_VAL)) + 1
         
-        # 6. Traffic Allocation
+        # Traffic Allocation
         chosenVariation = None
         cumulativeTraffic = 0
 
-        for variation in exp.variations:
-          rangeLimit = int(variation.traffic * 100)
-          
-          if bucketVal <= (cumulativeTraffic + rangeLimit):
-            chosenVariation = variation
-            break
+        if len(exp.variations) == 1:
+          chosenVariation = exp.variations[0]
+        else:   
+          for variation in exp.variations:
+            rangeLimit = int(variation.traffic * 100)
+            
+            if bucketVal <= (cumulativeTraffic + rangeLimit):
+              chosenVariation = variation
+              break
           
           cumulativeTraffic += rangeLimit
 
         if chosenVariation:
-          # 7. Async Persistence
+          # Async Persistence
           bgTasks.add_task(self.recordAssignment, exp.id, endUserId, chosenVariation.id)
           decisions.append(self.buildDecisionDto(exp, chosenVariation))
 
@@ -129,18 +132,18 @@ class DecisionService:
       return any(matches)
 
   def getActiveExperiments(self, projectId: int) -> list[Experiment]:
-    cacheKey = f"project:{projectId}:active_experiments"
+    cacheKey = f"project:{projectId}:active-experiments"
     
-    # 1. Try Redis Cache
+    # Try Redis Cache
     cachedData = self.cache.get(cacheKey)
     if cachedData:
       return [self.deserializeExperiment(item) for item in cachedData]
     
-    # 2. Cache Miss: Fetch from DB
+    # Cache Miss: Fetch from DB
     allExperiments = self.experimentRepo.getAll(rows=1000, page=1, projectId=projectId)
     activeExperiments = [e for e in allExperiments if e.status == ExperimentStatus.ACTIVE]
-    
-    # 3. Serialize and Save to Redis
+
+    # Serialize and Save to Redis
     serializedData = [self.serializeExperiment(e) for e in activeExperiments]
     self.cache.set(cacheKey, serializedData, ttl=60)
     
@@ -162,12 +165,19 @@ class DecisionService:
 
   # Helper: Convert Dictionary back to DB Object
   def deserializeExperiment(self, data: dict) -> Experiment:
-    # Manually reconstruct objects to keep relationships valid
+    # Pop the nested lists out of the dictionary
+    conditionsData = data.pop("conditions", [])
+    metricsData = data.pop("metrics", [])
+    variationsData = data.pop("variations", [])
+
+    # Create the Experiment object with only the simple fields (id, title, etc.)
     exp = Experiment(**data)
-    # Reconstruct relationships from nested lists
-    exp.conditions = [Condition(**c) for c in data.get("conditions", [])]
-    exp.metrics = [Metrics(**m) for m in data.get("metrics", [])]
-    exp.variations = [Variation(**v) for v in data.get("variations", [])]
+
+    # Manually reconstruct the relationships from the popped data
+    exp.conditions = [Condition(**c) for c in conditionsData]
+    exp.metrics = [Metrics(**m) for m in metricsData]
+    exp.variations = [Variation(**v) for v in variationsData]
+    
     return exp
 
   def buildDecisionDto(self, exp: Experiment, variation) -> ExperimentDecisionDto:
@@ -188,7 +198,8 @@ class DecisionService:
         custom=m.custom, 
         selector=m.selector, 
         description=m.description, 
-        triggered=m.triggered
+        triggeredOnQA=m.triggeredOnQA,
+        triggeredOnLIVE=m.triggeredOnLIVE
       ) for m in exp.metrics
     ]
 

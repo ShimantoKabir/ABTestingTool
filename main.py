@@ -17,6 +17,7 @@ from src.experiment import ExperimentRouter
 from src.variation import VariationRouter
 from src.condition import ConditionRouter
 from src.metrics import MetricsRouter
+from src.metrics import MetricsInsecureRouter
 from src.decision import DecisionRouter
 from core import app
 
@@ -48,6 +49,7 @@ app.include_router(ExperimentRouter.routes, dependencies=[Depends(getEmail), Dep
 app.include_router(VariationRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
 app.include_router(ConditionRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
 app.include_router(MetricsRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
+app.include_router(MetricsInsecureRouter.routes)
 app.include_router(DecisionRouter.routes)
 app.include_router(AuthRouter.routes)
 app.include_router(UserInsecureRouter.routes)
@@ -58,6 +60,7 @@ app.add_middleware(AuthMiddleware)
 origins = [
   "http://localhost:3000",  
   "http://127.0.0.1:3000",
+  "http://localhost:3030"
 ]
 
 app.add_middleware(

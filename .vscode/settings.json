@@ -29,6 +29,7 @@
     "pycache",
     "pyjwt",
     "qualname",
+    "Regexs",
     "repr",
     "selectinload",
     "setex",

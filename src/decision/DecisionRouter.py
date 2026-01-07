@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, status, HTTPException, BackgroundTasks
-from di import DecisionServiceDep, ProjectServiceDep
+from di import DecisionServiceDep
 from src.decision.dtos.DecisionRequestDto import DecisionRequestDto
 from src.decision.dtos.DecisionResponseDto import DecisionResponseDto
 

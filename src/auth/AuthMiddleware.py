@@ -1,4 +1,5 @@
 import jwt
+import re
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import Request, Response, status
 from config import Config
@@ -22,11 +23,21 @@ class AuthMiddleware(BaseHTTPMiddleware):
       "/users/join-organization",
       "/static/menu.json",
       "/organizations",
-      "/organizations/search"
+      "/organizations/search",
+      "/static/client-sdk.js",
+      "/decision"
+    ]
+
+    excludedRegexs = [
+      r"^/metrics/\d+/track$" 
     ]
 
     if request.url.path in excludedPaths:
       return await call_next(request)
+    
+    for pattern in excludedRegexs:
+      if re.match(pattern, request.url.path):
+        return await call_next(request)
 
     authorization = request.headers.get("authorization")
     authEmail = request.headers.get("email")

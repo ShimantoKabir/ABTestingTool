@@ -59,7 +59,7 @@ class ConditionService:
 
   # Helper to keep code clean
   def invalidateProjectCache(self, projectId: int):
-    cacheKey = f"project:{projectId}:active_experiments"
+    cacheKey = f"project:{projectId}:active-experiments"
     self.cache.delete(cacheKey)
 
   def mapToResponse(self, c: Condition) -> ConditionResponseDto:

@@ -43,20 +43,3 @@ async def deleteMetric(
     service: MetricsServiceDep
   ) -> MetricsResponseDto:
   return service.deleteMetric(id)
-
-@routes.post(
-  "/metrics/{id}/track", 
-  tags=["metrics"],
-  name="act:track-metric",
-  response_model=MetricsTrackResponseDto
-)
-async def trackMetric(
-    id: int,
-    service: MetricsServiceDep,
-    mode: TriggerMode = TriggerMode.LIVE # Defaults to 'Live' if not provided
-  ):
-  """
-  Track a metric event. 
-  Query Param: ?mode=QA or ?mode=Live (Default)
-  """
-  return service.trackMetric(id, mode)
