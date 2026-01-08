@@ -3,5 +3,7 @@ from typing import Optional
 
 @dataclass
 class DecisionRequestDto:
-  url: str
+  url: str # Required
+  projectId: int # Required
   endUserId: Optional[int] = None
+                     

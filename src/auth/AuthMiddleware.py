@@ -25,12 +25,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
       "/organizations",
       "/organizations/search",
       "/static/client-sdk.js",
-      "/decision"
+      "/decision",
+      "/metrics/track"
     ]
 
-    excludedRegexs = [
-      r"^/metrics/\d+/track$" 
-    ]
+    excludedRegexs = []
 
     if request.url.path in excludedPaths:
       return await call_next(request)

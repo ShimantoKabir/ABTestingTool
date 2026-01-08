@@ -23,3 +23,7 @@ class MetricsRepository(ABC):
   @abstractmethod
   def incrementTrigger(self, id: int, mode: TriggerMode):
     pass
+
+  @abstractmethod
+  def getByExperimentAndEventName(self, experimentId: int, eventName: str) -> Metrics:
+    pass

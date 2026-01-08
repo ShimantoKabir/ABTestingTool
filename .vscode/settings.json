@@ -58,5 +58,7 @@
     }
   ],
   "editor.fontSize": 15,
-  "window.zoomLevel": 0.8
+  "window.zoomLevel": 0.8,
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.typeCheckingMode": "off"
 }

@@ -1,33 +1,32 @@
 class ABTestingClient {
   /**
    * @param {Object} config
-   * @param {string} config.baseUrl - Your API server URL (e.g., "http://localhost:8000")
+   * @param {string} config.serverBaseUrl - Your API server URL (e.g., "http://localhost:8000")
    * @param {number} config.projectId - The ID of the project this website belongs to
-   * @param {string} [config.mode='Live'] - 'Live' or 'QA' (for metric tracking)
    */
   constructor(config) {
-    if (!config.baseUrl || !config.projectId) {
-      throw new Error("ABTestingSDK: baseUrl and projectId are required.");
+    if (!config.serverBaseUrl || !config.projectId) {
+      throw new Error(
+        "ABTestingSDK: serverBaseUrl and projectId are required."
+      );
     }
-    this.baseUrl = config.baseUrl;
+    this.serverBaseUrl = config.serverBaseUrl;
     this.projectId = config.projectId;
-    this.mode = config.mode || "Live";
-    this.storageKey = "ab-testing-user-id";
+    this.storageKey = "ab-end-user-id"; // Key for localStorage
   }
 
-  /**
-   * Initialize the SDK: Fetch decisions and apply changes.
-   */
   async init() {
     try {
       const decisionData = await this._fetchDecision();
 
-      // 1. Persist User Identity (Sticky Bucketing)
+      // --- NEW: Save the User ID to localStorage ---
+      // The server returns the ID it used (either the one we sent, or a new random one).
+      // We save it so the user remains consistent on next reload.
       if (decisionData.endUserId) {
         localStorage.setItem(this.storageKey, decisionData.endUserId);
       }
 
-      // 2. Apply Decisions (Visual Changes)
+      // Apply Decisions (Visual Changes)
       if (decisionData.decisions && Array.isArray(decisionData.decisions)) {
         decisionData.decisions.forEach((decision) => {
           this._applyExperiment(decision);
@@ -42,17 +41,19 @@ class ABTestingClient {
    * internal: Fetch decision from backend
    */
   async _fetchDecision() {
+    // 1. Read User ID from localStorage (was Cookie)
     const userId = localStorage.getItem(this.storageKey);
+
     const payload = {
       url: window.location.href,
       endUserId: userId ? parseInt(userId) : null,
+      projectId: this.projectId,
     };
 
-    const response = await fetch(`${this.baseUrl}/decision`, {
+    const response = await fetch(`${this.serverBaseUrl}/decision`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "project-id": this.projectId.toString(), // Required by DecisionRouter.py
       },
       body: JSON.stringify(payload),
     });
@@ -64,16 +65,12 @@ class ABTestingClient {
     return await response.json();
   }
 
-  /**
-   * internal: Apply CSS/JS and setup metrics for a single experiment
-   */
   _applyExperiment(decision) {
-    // 1. Inject Experiment-Level CSS & JS (if any)
+    // Inject CSS & JS
     if (decision.experimentCss)
       this._injectCss(decision.experimentCss, `exp-${decision.experimentId}`);
     if (decision.experimentJs) this._executeJs(decision.experimentJs);
 
-    // 2. Inject Variation-Level CSS & JS
     const variation = decision.variation;
     if (variation) {
       if (variation.css)
@@ -81,15 +78,12 @@ class ABTestingClient {
       if (variation.js) this._executeJs(variation.js);
     }
 
-    // 3. Attach Metric Listeners
+    // Attach Metric Listeners
     if (decision.metrics && Array.isArray(decision.metrics)) {
-      this._setupMetrics(decision.metrics);
+      this._setupMetrics(decision.metrics, decision.experimentId);
     }
   }
 
-  /**
-   * internal: Inject CSS into the head
-   */
   _injectCss(cssContent, id) {
     const style = document.createElement("style");
     style.id = `ab-style-${id}`;
@@ -97,12 +91,8 @@ class ABTestingClient {
     document.head.appendChild(style);
   }
 
-  /**
-   * internal: Execute JS safely
-   */
   _executeJs(jsContent) {
     try {
-      // Create a function wrapper to prevent scope pollution
       const scriptFn = new Function(jsContent);
       scriptFn();
     } catch (e) {
@@ -110,52 +100,77 @@ class ABTestingClient {
     }
   }
 
-  /**
-   * internal: Find elements by selector and attach tracking events
-   */
-  _setupMetrics(metrics) {
+  _setupMetrics(metrics, experimentId) {
     metrics.forEach((metric) => {
-      // Only track if it's a DOM interaction metric (has a selector)
       if (metric.selector) {
-        // Wait for DOM to be ready just in case elements aren't loaded yet
         if (document.readyState === "loading") {
           document.addEventListener("DOMContentLoaded", () =>
-            this._attachListener(metric)
+            this._attachListener(metric, experimentId)
           );
         } else {
-          this._attachListener(metric);
+          this._attachListener(metric, experimentId);
         }
       }
     });
   }
 
-  _attachListener(metric) {
+  _attachListener(metric, experimentId) {
     const elements = document.querySelectorAll(metric.selector);
     elements.forEach((el) => {
       el.addEventListener(
         "click",
         () => {
-          this._trackMetric(metric.id);
+          this._trackMetric(metric.id, experimentId);
         },
         { once: false }
-      ); // Prevent spamming counts on double-click
+      );
     });
   }
 
   /**
    * internal: Call the backend tracking endpoint
+   * @param {number} metricId
+   * @param {number} experimentId
    */
-  async _trackMetric(metricId) {
+  async _trackMetric(metricId, experimentId) {
     try {
-      // Uses the 'mode' param we added earlier (QA vs Live)
-      await fetch(
-        `${this.baseUrl}/metrics/${metricId}/track?mode=${this.mode}`,
-        {
-          method: "POST",
-        }
-      );
+      await fetch(`${this.serverBaseUrl}/metrics/track`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          metricsId: metricId,
+          experimentId: experimentId, // Pass the experimentId from the SDK,
+          custom: false,
+        }),
+      });
+      console.log(`ABTestingSDK: Metric tracked successfully`);
+    } catch (error) {
+      console.error("ABTestingSDK: Failed to track metric", error);
+    }
+  }
+
+  /**
+   * internal: Call the backend tracking endpoint
+   * @param {string} eventName
+   * @param {number} experimentId
+   */
+  async trackCustomMetric(eventName, experimentId) {
+    try {
+      await fetch(`${this.serverBaseUrl}/metrics/track`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          eventName: eventName,
+          experimentId: experimentId, // Pass the experimentId from the SDK
+          custom: true,
+        }),
+      });
       console.log(
-        `ABTestingSDK: Metric ${metricId} tracked successfully [${this.mode}]`
+        `ABTestingSDK: Custom metric ${eventName} tracked successfully`
       );
     } catch (error) {
       console.error("ABTestingSDK: Failed to track metric", error);
@@ -163,5 +178,4 @@ class ABTestingClient {
   }
 }
 
-// Attach to window for global usage
 window.ABTestingClient = ABTestingClient;

@@ -33,10 +33,11 @@ class DecisionService:
 
   def makeDecision(
       self, 
-      reqDto: DecisionRequestDto, 
-      projectId: int, 
-      bgTasks: BackgroundTasks
+      reqDto: DecisionRequestDto,
+      bgTasks: BackgroundTasks,
     ) -> DecisionResponseDto:
+    
+    projectId: int = reqDto.projectId
     
     # Identity Management
     endUserId = reqDto.endUserId if reqDto.endUserId else random.randint(100000, 999999)

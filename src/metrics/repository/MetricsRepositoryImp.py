@@ -50,3 +50,14 @@ class MetricsRepositoryImp(MetricsRepository):
 
     if result.rowcount == 0:
       raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Metric not found!")
+    
+  def getByExperimentAndEventName(self, experimentId: int, eventName: str) -> Metrics:
+    statement = select(Metrics).where(
+      Metrics.experimentId == experimentId,
+      Metrics.selector == eventName,
+      Metrics.custom == True
+    )
+    result = self.db.exec(statement).first()
+    if not result:
+      raise HTTPException(status_code=404, detail=f"Custom metric '{eventName}' not found for this experiment!")
+    return result
