@@ -1,4 +1,4 @@
-SELECT * FROM experiment;
+SELECT * FROM result;
 -- SELECT * FROM userorglin
 -- SELECT * FROM organization;
 -- SELECT * FROM role;
