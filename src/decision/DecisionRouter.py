@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Response, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks
 from di import DecisionServiceDep
 from src.decision.dtos.DecisionRequestDto import DecisionRequestDto
 from src.decision.dtos.DecisionResponseDto import DecisionResponseDto
@@ -14,7 +14,6 @@ routes = APIRouter()
 async def makeDecision(
   reqDto: DecisionRequestDto, 
   decisionService: DecisionServiceDep,
-  response: Response,
   bgTasks: BackgroundTasks # Change: Inject BackgroundTasks
 ) -> DecisionResponseDto:
 

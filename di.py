@@ -33,6 +33,8 @@ from src.decision.services.DecisionService import DecisionService
 from src.utils.CacheService import CacheService
 from src.project.repository.ProjectRepositoryImp import ProjectRepositoryImp
 from src.db.repository.UserProjectLinkRepositoryImp import UserProjectLinkRepositoryImp
+from src.result.repository.ResultRepositoryImp import ResultRepositoryImp
+from src.result.services.ResultService import ResultService
 
 def getCacheService() -> CacheService:
   return CacheService()
@@ -120,12 +122,17 @@ def getConditionService(db: DBSessionDep, cache: CacheServiceDep) -> ConditionSe
 def getMetricsService(db: DBSessionDep) -> MetricsService:
   repo = MetricsRepositoryImp(db)
   experimentRepo = ExperimentRepositoryImp(db)
-  return MetricsService(repo, experimentRepo)
+  resultRepo = ResultRepositoryImp(db)
+  return MetricsService(repo, experimentRepo, resultRepo)
 
 def getDecisionService(db: DBSessionDep, cache: CacheServiceDep) -> DecisionService:
   bucketRepo = BucketRepositoryImp(db)
   experimentRepo = ExperimentRepositoryImp(db)
   return DecisionService(bucketRepo, experimentRepo, cache)
+
+def getResultService(db: DBSessionDep) -> ResultService:
+  repo = ResultRepositoryImp(db)
+  return ResultService(repo)
 
 UserServiceDep = Annotated[UserService, Depends(getUserService)]
 MenuServiceDep = Annotated[MenuService, Depends(getMenuService)]
@@ -139,3 +146,4 @@ VariationServiceDep = Annotated[VariationService, Depends(getVariationService)]
 ConditionServiceDep = Annotated[ConditionService, Depends(getConditionService)]
 MetricsServiceDep = Annotated[MetricsService, Depends(getMetricsService)]
 DecisionServiceDep = Annotated[DecisionService, Depends(getDecisionService)]
+ResultServiceDep = Annotated[ResultService, Depends(getResultService)]

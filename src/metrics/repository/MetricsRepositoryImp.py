@@ -61,3 +61,22 @@ class MetricsRepositoryImp(MetricsRepository):
     if not result:
       raise HTTPException(status_code=404, detail=f"Custom metric '{eventName}' not found for this experiment!")
     return result
+  
+  def markAsPrimary(self, metricId: int, experimentId: int):
+    # Reset ALL metrics in this experiment to False
+    statementReset = (
+      update(Metrics)
+      .where(Metrics.experimentId == experimentId)
+      .values(isPrimary=False)
+    )
+    self.db.exec(statementReset)
+
+    # Set the TARGET metric to True
+    statementSet = (
+      update(Metrics)
+      .where(Metrics.id == metricId)
+      .values(isPrimary=True)
+    )
+    self.db.exec(statementSet)
+    
+    self.db.commit()

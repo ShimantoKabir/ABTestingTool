@@ -8,32 +8,34 @@ from src.metrics.model.Metrics import Metrics
 from src.metrics.dtos.MetricsTrackResponseDto import MetricsTrackResponseDto
 from src.metrics.model.TriggerMode import TriggerMode
 from src.experiment.model.ExperimentStatus import ExperimentStatus
+from src.result.repository.ResultRepository import ResultRepository
 
 class MetricsService:
   def __init__(
     self, 
     repo: MetricsRepository,
-    experimentRepo: ExperimentRepository
+    experimentRepo: ExperimentRepository,
+    resultRepo: ResultRepository
   ):
     self.repo = repo
     self.experimentRepo = experimentRepo
+    self.resultRepo = resultRepo
 
   def createMetric(
       self, 
       experimentId: int, 
       reqDto: MetricsCreateRequestDto
     ) -> MetricsResponseDto:
-    # 1. Validate Experiment Exists
+    # Validate Experiment Exists
     self.experimentRepo.getById(experimentId)
 
-    # 2. Create Metric
+    # Create Metric
     newMetric = Metrics(
       title=reqDto.title,
       custom=reqDto.custom,
       selector=reqDto.selector,
       description=reqDto.description,
-      experimentId=experimentId,
-      triggered=0 # Default count
+      experimentId=experimentId
     )
     
     savedMetric = self.repo.add(newMetric)
@@ -51,28 +53,32 @@ class MetricsService:
     return self._mapToResponse(metric)
 
   def trackMetric(self, reqDto: MetricsTrackRequestDto):
-    # Resolve the Metric Object
     if reqDto.custom:
       if not reqDto.eventName:
-        raise HTTPException(status_code=400, detail="Event Name is required for custom metrics!")
-        
-      # Find the metric ID based on the event name (selector)
+        raise HTTPException(status_code=400, detail="Event Name is required!")
       metric = self.repo.getByExperimentAndEventName(reqDto.experimentId, reqDto.eventName)
-
     else:
       if not reqDto.metricsId:
-        raise HTTPException(status_code=400, detail="Metric ID is required for standard metrics!")
-        
+        raise HTTPException(status_code=400, detail="Metric ID is required!")
       metric = self.repo.getById(reqDto.metricsId)
 
-    # Determine Mode (QA vs Live)
-    # We fetch experiment to check status
-    experiment = self.experimentRepo.getById(metric.experimentId)
+    # Determine Mode
+    experiment = self.experimentRepo.getById(reqDto.experimentId)
     
-    mode = TriggerMode.LIVE if experiment.status == ExperimentStatus.ACTIVE else TriggerMode.QA
+    # If it is a Preview request, ALWAYS track as QA.
+    # Otherwise, check the experiment status (Active = Live, Draft/Paused = QA)
+    if reqDto.isPreview:
+      mode = TriggerMode.QA
+    else:
+      mode = TriggerMode.LIVE if experiment.status == ExperimentStatus.ACTIVE else TriggerMode.QA
 
-    # Increment Counter
-    self.repo.incrementTrigger(metric.id, mode)
+    # Increment
+    self.resultRepo.increment(
+      metricId=metric.id, 
+      variationId=reqDto.variationId, 
+      experimentId=reqDto.experimentId,
+      mode=mode
+    )
 
     return MetricsTrackResponseDto(
       message=f"Metric tracked successfully in {mode} mode"
@@ -81,11 +87,22 @@ class MetricsService:
   def _mapToResponse(self, m: Metrics) -> MetricsResponseDto:
     return MetricsResponseDto(
       id=m.id,
-      experimentId=m.experimentId, # type: ignore
-      title=m.title, # type: ignore
+      experimentId=m.experimentId, 
+      title=m.title, 
       custom=m.custom,
       selector=m.selector,
       description=m.description,
-      triggeredOnQA=m.triggeredOnQA if m.triggeredOnQA else 0, # <--- Added
-      triggeredOnLIVE=m.triggeredOnLIVE if m.triggeredOnLIVE else 0 # <--- Added
+      isPrimary=m.isPrimary
     )
+  
+  def makeMetricPrimary(self, metricId: int) -> MetricsResponseDto:
+    # Get the metric to ensure it exists and find its experimentId
+    metric = self.repo.getById(metricId) # Raises 404 if not found
+    
+    # Perform the update
+    self.repo.markAsPrimary(metric.id, metric.experimentId)
+    
+    # manually set it to return the response immediately
+    metric.isPrimary = True
+
+    return self._mapToResponse(metric)

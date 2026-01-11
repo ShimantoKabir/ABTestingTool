@@ -26,7 +26,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
       "/organizations/search",
       "/static/client-sdk.js",
       "/decision",
-      "/metrics/track"
+      "/metrics/track",
+      "/decision/preview"
     ]
 
     excludedRegexs = []

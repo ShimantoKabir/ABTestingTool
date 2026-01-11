@@ -19,6 +19,8 @@ from src.condition import ConditionRouter
 from src.metrics import MetricsRouter
 from src.metrics import MetricsInsecureRouter
 from src.decision import DecisionRouter
+from src.result import ResultRouter
+from src.decision import DecisionInsecureRouter
 from core import app
 
 # IMPORT Models
@@ -49,11 +51,13 @@ app.include_router(ExperimentRouter.routes, dependencies=[Depends(getEmail), Dep
 app.include_router(VariationRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
 app.include_router(ConditionRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
 app.include_router(MetricsRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
+app.include_router(ResultRouter.routes, dependencies=[Depends(getEmail), Depends(HTTPBearer())])
 app.include_router(MetricsInsecureRouter.routes)
 app.include_router(DecisionRouter.routes)
 app.include_router(AuthRouter.routes)
 app.include_router(UserInsecureRouter.routes)
 app.include_router(OrgRouter.routes)
+app.include_router(DecisionInsecureRouter.routes)
 
 app.add_middleware(AuthMiddleware)
 

@@ -5,8 +5,11 @@ from typing import Optional
 class MetricsTrackRequestDto:
     # Required fields first
     experimentId: int
+    variationId: int
     custom: bool
+    isPreview: bool = False
     
     # Optional fields follow
     metricsId: Optional[int] = None
     eventName: Optional[str] = None
+    

@@ -8,8 +8,7 @@ class Metrics(SQLModel, table=True):
   title: str = Field(default=None, nullable=True)
   custom: bool = Field(default=False , nullable=False)
   selector: str = Field(default=None, nullable=True)
-  triggeredOnLIVE: int = Field(default=0, nullable=True)
-  triggeredOnQA: int = Field(default=0, nullable=True)
+  isPrimary: bool = Field(default=False, nullable=False)
   experiment: Optional["Experiment"] = Relationship(back_populates="metrics") # type: ignore
   description: str = Field(default=None, nullable=True)
   experimentId: Optional[int] = Field(default=None, foreign_key="experiment.id")

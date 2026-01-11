@@ -43,3 +43,19 @@ async def deleteMetric(
     service: MetricsServiceDep
   ) -> MetricsResponseDto:
   return service.deleteMetric(id)
+
+@routes.patch(
+  "/metrics/{id}/primary",
+  response_model=MetricsResponseDto,
+  tags=["metrics"],
+  name="act:update-metric-primary"
+)
+async def makeMetricPrimary(
+    id: int,
+    service: MetricsServiceDep
+  ) -> MetricsResponseDto:
+  """
+  Sets the specified metric as the Primary metric for its experiment.
+  All other metrics in the same experiment will be set to isPrimary=False.
+  """
+  return service.makeMetricPrimary(id)

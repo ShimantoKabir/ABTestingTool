@@ -9,5 +9,4 @@ class MetricsResponseDto:
   custom: bool
   selector: Optional[str]
   description: Optional[str]
-  triggeredOnLIVE: int
-  triggeredOnQA: int
+  isPrimary: bool

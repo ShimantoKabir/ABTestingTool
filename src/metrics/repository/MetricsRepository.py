@@ -27,3 +27,7 @@ class MetricsRepository(ABC):
   @abstractmethod
   def getByExperimentAndEventName(self, experimentId: int, eventName: str) -> Metrics:
     pass
+
+  @abstractmethod
+  def markAsPrimary(self, metricId: int, experimentId: int):
+    pass

@@ -16,6 +16,9 @@ from src.variation.model.Variation import Variation
 from src.condition.model.Condition import Condition
 from src.metrics.model.Metrics import Metrics
 from config import Config
+from src.decision.dtos.PreviewRequestDto import PreviewRequestDto
+from src.decision.dtos.PreviewResponseDto import PreviewResponseDto
+from fastapi import HTTPException, status
 
 class DecisionService:
   # The bucketing scale (1 to 10,000 for 0.01% granularity)
@@ -49,7 +52,8 @@ class DecisionService:
 
     for exp in activeExperiments:
       # Targeting Check
-      if not self.checkTargeting(exp, reqDto.url):
+      isTargeted : bool = self.checkTargeting(exp, reqDto.url)
+      if not isTargeted:
         continue
 
       # Consistency Check (Sticky Bucketing)
@@ -98,7 +102,10 @@ class DecisionService:
     if not existing:
       self.bucketRepo.add(Bucket(expId=expId, endUserId=userId, variationId=varId))
 
-  def checkTargeting(self, exp: Experiment, url: str) -> bool:
+  def checkTargeting(self, exp: Experiment, reqUrl: str) -> bool:
+    if exp.url == reqUrl:
+      return True
+
     if not exp.conditions:
       return True
 
@@ -108,20 +115,20 @@ class DecisionService:
       
       if cond.operator in [Operator.IS, Operator.CONTAIN]:
         for condUrl in cond.urls:
-          if cond.operator == Operator.CONTAIN and condUrl in url:
+          if cond.operator == Operator.CONTAIN and reqUrl in condUrl:
             isMatch = True
             break
-          if cond.operator == Operator.IS and condUrl == url:
+          if cond.operator == Operator.IS and reqUrl in condUrl:
             isMatch = True
             break
              
       elif cond.operator in [Operator.IS_NOT, Operator.NOT_CONTAIN]:
         isMatch = True 
         for condUrl in cond.urls:
-          if cond.operator == Operator.NOT_CONTAIN and condUrl in url:
+          if cond.operator == Operator.NOT_CONTAIN and reqUrl in condUrl:
             isMatch = False
             break 
-          if cond.operator == Operator.IS_NOT and condUrl == url:
+          if cond.operator == Operator.IS_NOT and reqUrl in condUrl:
             isMatch = False
             break 
       
@@ -146,7 +153,7 @@ class DecisionService:
 
     # Serialize and Save to Redis
     serializedData = [self.serializeExperiment(e) for e in activeExperiments]
-    self.cache.set(cacheKey, serializedData, ttl=60)
+    self.cache.set(cacheKey, serializedData)
     
     return activeExperiments
 
@@ -217,4 +224,48 @@ class DecisionService:
       ),
       conditions=condDtos,
       metrics=metDtos
+    )
+  
+  def getPreview(self, reqDto: PreviewRequestDto) -> PreviewResponseDto:
+    # Fetch Experiment
+    experiment = self.experimentRepo.getById(reqDto.experimentId) # [cite: 141]
+    
+    # Find the specific Variation
+    # Since 'experiment.variations' is a relationship, we iterate to find the matching ID.
+    targetVariation = next(
+      (v for v in experiment.variations if v.id == reqDto.variationId), 
+      None
+    ) 
+    
+    if not targetVariation:
+      raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND, 
+        detail=f"Variation {reqDto.variationId} not found in Experiment {reqDto.experimentId}"
+      )
+
+    # Map Metrics
+    metricDtos = [
+      MetricsResponseDto(
+        id=m.id, 
+        experimentId=m.experimentId, 
+        title=m.title, 
+        custom=m.custom, 
+        selector=m.selector, 
+        description=m.description,
+        isPrimary=m.isPrimary
+      ) for m in experiment.metrics
+    ]
+
+    # Construct Response
+    return PreviewResponseDto(
+      experimentId=experiment.id,
+      experimentJs=experiment.js,
+      experimentCss=experiment.css,
+      variation=VariationDecisionDto(
+        variationId=targetVariation.id,
+        variationTitle=targetVariation.title,
+        js=targetVariation.js,
+        css=targetVariation.css
+      ),
+      metrics=metricDtos
     )

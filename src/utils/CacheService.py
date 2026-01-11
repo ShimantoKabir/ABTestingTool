@@ -6,7 +6,7 @@ from config import Config
 class CacheService:
   def __init__(self):
     self.client = redis.from_url(Config.getValByKey("REDIS_URL"))
-    self.defaultTtl = 300 # 60 seconds
+    self.defaultTtl = 1 # 60 seconds
 
   def get(self, key: str) -> Optional[Any]:
     data = self.client.get(key)

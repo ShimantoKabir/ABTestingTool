@@ -13,21 +13,42 @@ class ABTestingClient {
     this.serverBaseUrl = config.serverBaseUrl;
     this.projectId = config.projectId;
     this.storageKey = "ab-end-user-id"; // Key for localStorage
+    this.isPreviewMode = false;
+    this.variationId = null;
   }
 
   async init() {
     try {
-      const decisionData = await this._fetchDecision();
+      const urlParams = new URLSearchParams(window.location.search);
+      const previewExpId = urlParams.get("preview-experiment-id");
+      const previewVarId = urlParams.get("variation-id");
 
-      // --- NEW: Save the User ID to localStorage ---
-      // The server returns the ID it used (either the one we sent, or a new random one).
-      // We save it so the user remains consistent on next reload.
-      if (decisionData.endUserId) {
-        localStorage.setItem(this.storageKey, decisionData.endUserId);
+      let decisionData;
+
+      if (previewExpId && previewVarId) {
+        console.log("ABTestingSDK: Preview Mode Detected");
+
+        // NEW: Set the flag to true
+        this.isPreviewMode = true;
+        this.variationId = parseInt(previewVarId);
+
+        decisionData = await this._fetchPreview(
+          parseInt(previewExpId),
+          parseInt(previewVarId)
+        );
+      } else {
+        // ... existing normal flow ...
+        decisionData = await this._fetchDecision();
+        // ...
       }
 
-      // Apply Decisions (Visual Changes)
-      if (decisionData.decisions && Array.isArray(decisionData.decisions)) {
+      // ... existing apply logic ...
+      if (previewExpId && previewVarId) {
+        this._applyExperiment(decisionData);
+      } else if (
+        decisionData.decisions &&
+        Array.isArray(decisionData.decisions)
+      ) {
         decisionData.decisions.forEach((decision) => {
           this._applyExperiment(decision);
         });
@@ -35,6 +56,25 @@ class ABTestingClient {
     } catch (error) {
       console.error("ABTestingSDK Error:", error);
     }
+  }
+
+  /**
+   * New: Fetch preview data
+   */
+  async _fetchPreview(experimentId, variationId) {
+    const response = await fetch(`${this.serverBaseUrl}/decision/preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        experimentId: experimentId,
+        variationId: variationId,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch preview: ${response.statusText}`);
+    }
+    return await response.json();
   }
 
   /**
@@ -73,6 +113,8 @@ class ABTestingClient {
 
     const variation = decision.variation;
     if (variation) {
+      this.variationId = variation.variationId;
+
       if (variation.css)
         this._injectCss(variation.css, `var-${variation.variationId}`);
       if (variation.js) this._executeJs(variation.js);
@@ -141,8 +183,10 @@ class ABTestingClient {
         },
         body: JSON.stringify({
           metricsId: metricId,
-          experimentId: experimentId, // Pass the experimentId from the SDK,
+          experimentId: experimentId,
+          variationId: this.variationId,
           custom: false,
+          isPreview: this.isPreviewMode,
         }),
       });
       console.log(`ABTestingSDK: Metric tracked successfully`);
@@ -165,8 +209,10 @@ class ABTestingClient {
         },
         body: JSON.stringify({
           eventName: eventName,
-          experimentId: experimentId, // Pass the experimentId from the SDK
+          experimentId: experimentId,
           custom: true,
+          variationId: this.variationId,
+          isPreview: this.isPreviewMode,
         }),
       });
       console.log(
